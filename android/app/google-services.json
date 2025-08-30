@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "273338126401",
+    "project_id": "splitzy-ff42d",
+    "storage_bucket": "splitzy-ff42d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273338126401:android:d49d0e0da8f05845d7b6c0",
+        "android_client_info": {
+          "package_name": "com.kharchasplit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNVSH9F4_kNDDk0Bzk1PPEv_icdYGWw4Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
