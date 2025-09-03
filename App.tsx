@@ -4,15 +4,19 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator, BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { colors } from './src/utils/colors';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
-import { default as ProfileScreen } from './src/screens/ProfileScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
 import { default as GroupDetailScreen } from './src/screens/GroupDetailScreen';
 import { default as GroupDetailsScreen } from './src/screens/GroupDetailsScreen';
 import { default as ManageGroupScreen } from './src/screens/ManageGroupScreen';
 import { default as AddExpenseScreen } from './src/screens/AddExpenseScreen';
 import { default as AddMemberScreen } from './src/screens/AddMemberScreen';
 import { default as ExpenseDetailScreen } from './src/screens/ExpenseDetailScreen';
+
 
 
 type TabParamList = {
@@ -40,29 +44,38 @@ interface TabBarIconProps {
 }
 
 const TabBarIcon: React.FC<TabBarIconProps> = ({ name, focused }) => {
-  const getIconLabel = () => {
+  const getIcon = () => {
     switch (name) {
       case 'Home':
-        return '🏠';
+        return <MaterialIcons
+          name="group"
+          size={24}
+          color={focused ? colors.activeIcon : colors.inactiveIcon}
+        />;
       case 'Activity':
-        return '🔔';
+        return <MaterialIcons
+          name="notifications"
+          size={24}
+          color={focused ? colors.activeIcon : colors.inactiveIcon}
+        />;
       case 'Profile':
-        return '👤';
+        return <Ionicons
+          name="person"
+          size={24}
+          color={focused ? colors.activeIcon : colors.inactiveIcon}
+        />;
       default:
-        return '❓';
+        return <MaterialIcons
+          name="error"
+          size={24}
+          color={focused ? colors.activeIcon : colors.inactiveIcon}
+        />;
     }
   };
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Text
-        style={{
-          color: focused ? colors.activeIcon : colors.inactiveIcon,
-          fontSize: 20,
-        }}
-      >
-        {getIconLabel()}
-      </Text>
+      {getIcon()}
     </View>
   );
 };
