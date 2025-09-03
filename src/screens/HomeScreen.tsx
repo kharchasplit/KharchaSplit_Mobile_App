@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -12,7 +11,9 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import CreateNewGroupScreen from './CreateNewGroupScreen';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CreateNewGroupScreen } from './CreateNewGroupScreen';
+import { colors } from '../utils/colors';
 
 interface GroupDetail {
   text: string;
@@ -44,28 +45,9 @@ interface OverallBalance {
 
 interface HomeScreenProps {
   navigation: any;
-  route?: {
-    params?: {
-      reload?: boolean;
-      timestamp?: number;
-    };
-  };
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const theme = {
-    colors: {
-      background: '#F9FAFB',
-      surface: '#FFFFFF',
-      border: '#E5E7EB',
-      borderLight: '#F3F4F6',
-      text: '#111827',
-      textSecondary: '#6B7280',
-      textMuted: '#9CA3AF',
-      primary: '#4A90E2',
-    },
-  };
-
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,12 +59,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     totalYouAreOwed: 0,
     groupBalanceDetails: [],
   });
-  const [loading, setLoading] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
-  // Mock loading function
   const loadGroupsAndBalance = () => {
-    setLoading(true);
     setBalanceLoading(true);
     setTimeout(() => {
       const mockGroups: Group[] = [
@@ -122,7 +101,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       setGroups(mockGroups);
       setOverallBalance(mockBalance);
-      setLoading(false);
       setBalanceLoading(false);
     }, 1000);
   };
@@ -157,14 +135,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     if (showSearchBar) setSearchQuery('');
   };
 
-  const handleSearchQueryChange = (query: string) => setSearchQuery(query);
-
   const filteredGroups = groups.filter(
     group =>
       group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       group.details.some(detail =>
-        detail.text.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
+        detail.text.toLowerCase().includes(searchQuery.toLowerCase())
+      )
   );
 
   const onRefresh = () => {
@@ -173,7 +149,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const styles = createStyles(theme);
+  const styles = createStyles();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -196,9 +172,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
-            onChangeText={handleSearchQueryChange}
+            onChangeText={setSearchQuery}
             placeholder="Search groups or members..."
-            placeholderTextColor={theme.colors.textMuted}
+            placeholderTextColor={colors.secondaryText}
             autoFocus
           />
           {searchQuery.length > 0 && (
@@ -211,28 +187,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       <ScrollView
         style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        contentContainerStyle={{ paddingBottom: 120 }} // enough space for tab bar + floating button
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Overall Balance */}
         <View style={styles.balanceSection}>
           <Text style={styles.sectionTitle}>Overall Balance</Text>
           {balanceLoading ? (
-            <ActivityIndicator />
+            <ActivityIndicator color={colors.primaryButton} />
           ) : (
             <View style={styles.balanceRow}>
               <View style={styles.balanceItem}>
-                <Text>Net Balance</Text>
-                <Text>{overallBalance.netBalance}</Text>
+                <Text style={styles.balanceLabel}>Net Balance</Text>
+                <Text style={styles.balanceValue}>{overallBalance.netBalance}</Text>
               </View>
               <View style={styles.balanceItem}>
-                <Text>You Owe</Text>
-                <Text>{overallBalance.totalYouOwe}</Text>
+                <Text style={styles.balanceLabel}>You Owe</Text>
+                <Text style={styles.balanceValue}>{overallBalance.totalYouOwe}</Text>
               </View>
               <View style={styles.balanceItem}>
-                <Text>You Are Owed</Text>
-                <Text>{overallBalance.totalYouAreOwed}</Text>
+                <Text style={styles.balanceLabel}>You Are Owed</Text>
+                <Text style={styles.balanceValue}>{overallBalance.totalYouAreOwed}</Text>
               </View>
             </View>
           )}
@@ -254,13 +229,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={styles.groupDetails}>
               {group.details.map((detail, idx) => (
                 <View key={idx} style={styles.detailRow}>
-                  <Text>{detail.text}</Text>
-                  <Text>
+                  <Text style={styles.detailText}>{detail.text}</Text>
+                  <Text style={styles.detailText}>
                     {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
                   </Text>
                 </View>
               ))}
-              {group.moreBalances ? <Text>+ {group.moreBalances} more</Text> : null}
+              {group.moreBalances ? <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text> : null}
             </View>
           </TouchableOpacity>
         ))}
@@ -268,7 +243,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* Floating Button */}
       <TouchableOpacity style={styles.floatingButton} onPress={handleAddGroup}>
-        <Text style={{ color: '#fff', fontSize: 28 }}>➕</Text>
+        <Text style={{ color: colors.primaryButtonText, fontSize: 28 }}>➕</Text>
       </TouchableOpacity>
 
       {/* Create New Group Modal */}
@@ -279,43 +254,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   );
 };
 
-const createStyles = (theme: any) =>
+const createStyles = () =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: 16,
       paddingVertical: 12,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: colors.cardBackground,
       borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+      borderBottomColor: colors.background,
     },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text },
+    headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.primaryText },
     headerActions: { flexDirection: 'row' },
     headerButton: { padding: 8, marginLeft: 12 },
     searchContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.borderLight,
+      backgroundColor: colors.inputBackground,
       paddingHorizontal: 12,
       margin: 12,
       borderRadius: 12,
     },
-    searchInput: { flex: 1, height: 40, color: theme.colors.text },
-    scrollView: { flex: 1 },
+    searchInput: { flex: 1, height: 40, color: colors.inputText },
+    scrollView: {
+      flex: 1,
+    },
     balanceSection: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: colors.cardBackground,
       margin: 16,
       padding: 12,
       borderRadius: 8,
     },
-    sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
+    sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8, color: colors.primaryText },
     balanceRow: { flexDirection: 'row', justifyContent: 'space-around' },
     balanceItem: { alignItems: 'center' },
+    balanceLabel: { color: colors.secondaryText },
+    balanceValue: { color: colors.primaryText, fontWeight: '600' },
     groupCard: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: colors.cardBackground,
       marginHorizontal: 16,
       marginVertical: 8,
       padding: 12,
@@ -325,20 +307,20 @@ const createStyles = (theme: any) =>
     avatarContainer: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     avatar: { fontSize: 24 },
     avatarImage: { width: 50, height: 50, borderRadius: 25 },
-    groupName: { fontSize: 18, fontWeight: '600' },
+    groupName: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
     groupDetails: { paddingLeft: 8 },
     detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
+    detailText: { color: colors.primaryText },
+    moreBalances: { color: colors.secondaryText },
     floatingButton: {
       position: 'absolute',
-      bottom: 40,
+      bottom: 80, // space above tab bar
       right: 24,
       width: 60,
       height: 60,
       borderRadius: 30,
-      backgroundColor: theme.colors.primary,
+      backgroundColor: colors.primaryButton,
       justifyContent: 'center',
       alignItems: 'center',
     },
   });
-
-export default HomeScreen;

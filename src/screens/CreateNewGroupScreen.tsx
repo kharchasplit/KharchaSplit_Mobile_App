@@ -23,7 +23,7 @@ interface CreateNewGroupScreenProps {
   onSave: (newGroup: Group) => void;
 }
 
-const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({
+export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({
   onClose,
   onSave,
 }) => {
@@ -120,5 +120,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
-export default CreateNewGroupScreen;
