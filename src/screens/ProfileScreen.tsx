@@ -114,6 +114,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             </TouchableOpacity>
           ))}
         </View>
+        {/* App Version */}
+        <View style={styles.versionContainer}>
+          <Text style={styles.versionText}>Version 1.0.0</Text>
+        </View>
       </ScrollView>
 
       {/* Modals */}
@@ -140,6 +144,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
       <Modal visible={showHelpandSupport} animationType="slide" presentationStyle="pageSheet">
         <HelpandSupport onClose={() => setShowHelpandSupport(false)} />
       </Modal>
+
+
     </SafeAreaView>
   );
 };
@@ -206,4 +212,13 @@ const createStyles = () =>
       borderBottomColor: colors.cardBackground,
     },
     menuTitle: { fontSize: 16, color: colors.primaryText, fontWeight: '500' },
+    versionContainer: {
+      alignItems: 'center',
+      paddingVertical: 20,
+    },
+    versionText: {
+      color: colors.primaryText,
+      opacity: 0.5,
+      fontSize: 14,
+    },
   });
