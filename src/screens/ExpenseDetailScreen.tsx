@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -13,6 +12,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors } from '../utils/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ExpenseDetailScreenProps {
   route: {
@@ -26,7 +26,7 @@ interface ExpenseDetailScreenProps {
   };
 }
 
-const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route, navigation }) => {
+export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route, navigation }) => {
   const { expense, group } = route.params;
   const [loading, setLoading] = useState(true);
   const [expenseData, setExpenseData] = useState<any>(null);
@@ -457,4 +457,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ExpenseDetailScreen;
