@@ -121,7 +121,7 @@ const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route, naviga
           <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primaryButton} />
           <Text style={styles.loadingText}>Loading expense details...</Text>
         </View>
       </SafeAreaView>
@@ -184,7 +184,7 @@ const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route, naviga
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Split Details</Text>
           <View style={styles.splitTypeContainer}>
-            <MaterialIcons name="pie-chart" size={20} color={colors.primary} />
+              <MaterialIcons name="pie-chart" size={20} color={colors.activeIcon} />
             <Text style={styles.splitTypeText}>
               {currentExpense.splitType === 'equal'
                 ? 'Split Equally'
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryButton,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryButton,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   participantAmountText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.primaryButton,
   },
   receiptContainer: {
     position: 'relative',
