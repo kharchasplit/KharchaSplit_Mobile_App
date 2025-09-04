@@ -223,7 +223,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <TouchableOpacity
             key={group.id}
             style={styles.groupCard}
-            onPress={() => navigation.navigate('GroupDetailScreen', { group })}
+            onPress={() => navigation.navigate('GroupDetail', { group })}
           >
             <View style={styles.groupHeader}>
               <View style={styles.avatarContainer}>

@@ -27,12 +27,12 @@ type TabParamList = {
 
 type StackParamList = {
   HomeMain: undefined;
-  GroupDetail: undefined;
-  GroupDetails: undefined;
-  ManageGroup: undefined;
-  AddExpense: undefined;
-  AddMember: undefined;
-  ExpenseDetail: undefined;
+  GroupDetail: { group: any };
+  GroupDetails: { group: any };
+  ManageGroup: { group: any };
+  AddExpense: { group: any };
+  AddMember: { group: any };
+  ExpenseDetail: { expense: any; group: any };
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
