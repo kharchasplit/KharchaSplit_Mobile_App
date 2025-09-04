@@ -10,12 +10,12 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
-import { default as GroupDetailScreen } from './src/screens/GroupDetailScreen';
-import { default as GroupDetailsScreen } from './src/screens/GroupDetailsScreen';
-import { default as ManageGroupScreen } from './src/screens/ManageGroupScreen';
-import { default as AddExpenseScreen } from './src/screens/AddExpenseScreen';
-import { default as AddMemberScreen } from './src/screens/AddMemberScreen';
-import { default as ExpenseDetailScreen } from './src/screens/ExpenseDetailScreen';
+import { GroupDetailScreen } from './src/screens/GroupDetailScreen';
+import { GroupDetailsScreen } from './src/screens/GroupDetailsScreen';
+import { ManageGroupScreen } from './src/screens/ManageGroupScreen';
+import { AddExpenseScreen } from './src/screens/AddExpenseScreen';
+import { AddMemberScreen } from './src/screens/AddMemberScreen';
+import { ExpenseDetailScreen } from './src/screens/ExpenseDetailScreen';
 
 
 

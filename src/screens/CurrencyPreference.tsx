@@ -6,52 +6,33 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Modal,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { colors } from '../utils/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FAQs } from './FAQs';
-import { ContactSupport } from './ContactSupport';
-import { ReportAProblem } from './Reportaproblem';
-import { AppVersion } from './AppVersion';
 
-interface HelpandSupportProps {
+type CurrencyPreferenceProps = {
   onClose: () => void;
-}
+};
 
-export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
-  const [showFAQs, setShowFAQs] = useState(false);
-  const [showContactSupport, setShowContactSupport] = useState(false);
-  const [showReportaproblem, setShowReportaproblem] = useState(false);
-  const [showAppVersion, setShowAppVersion] = useState(false);
+type CurrencyOption = {
+  code: string;
+  logo: string;
+};
 
-  const Helpoptions = [
-    {
-      id: 1,
-      title: 'FAQs',
-      icon: 'help-circle-outline',
-      onPress: () => setShowFAQs(true),
-    },
-    {
-      id: 2,
-      title: 'Contact Support',
-      icon: 'chatbox-ellipses-outline',
-      onPress: () => setShowContactSupport(true),
-    },
-    {
-      id: 3,
-      title: 'Report a problem',
-      icon: 'alert-circle-outline',
-      onPress: () => setShowReportaproblem(true),
-    },
-    {
-      id: 4,
-      title: 'App Version',
-      icon: 'apps-outline',
-      onPress: () => setShowAppVersion(true),
-    },
+export const CurrencyPreference: React.FC<CurrencyPreferenceProps> = ({ onClose }) => {
+  const currencyOptions: CurrencyOption[] = [
+    { code: 'INR', logo: '₹' },
+    { code: 'USD', logo: '$' },
   ];
+
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('INR');
+
+  const handleCurrencySelect = (code: string) => {
+    setSelectedCurrency(code);
+    Alert.alert('Preference Saved', `You selected ${code} as your currency.`);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -62,50 +43,36 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
         <TouchableOpacity style={styles.backButton} onPress={onClose}>
           <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help & Support</Text>
+        <Text style={styles.headerTitle}>Currency Preference</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.text}>Help info and Support</Text>
+        <Text style={styles.text}>Select Currency Preference</Text>
 
-        {Helpoptions.map(item => (
+        {currencyOptions.map(({ code, logo }) => (
           <TouchableOpacity
-            key={item.id}
+            key={code}
             style={styles.option}
-            onPress={item.onPress}
-            activeOpacity={0.7}>
+            onPress={() => handleCurrencySelect(code)}
+          >
             <View style={styles.optionLeft}>
               <View style={styles.optionIconContainer}>
-                <Ionicons name={item.icon} size={20} color={colors.inactiveIcon} />
+                <Text style={styles.currencyLogo}>{logo}</Text>
               </View>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionTitle}>{item.title}</Text>
+                <Text style={styles.optionTitle}>{code}</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.inactiveIcon} />
+            {selectedCurrency === code && (
+              <Ionicons
+                name="checkmark"
+                size={20}
+                color={colors.activeIcon}
+              />
+            )}
           </TouchableOpacity>
         ))}
-
-        {/* FAQs Modal */}
-        <Modal visible={showFAQs} animationType="slide" presentationStyle="pageSheet">
-          <FAQs onClose={() => setShowFAQs(false)} />
-        </Modal>
-
-        {/* Contact Support Modal */}
-        <Modal visible={showContactSupport} animationType="slide" presentationStyle="pageSheet">
-          <ContactSupport onClose={() => setShowContactSupport(false)} />
-        </Modal>
-
-        {/* Report a problem Modal */}
-        <Modal visible={showReportaproblem} animationType="slide" presentationStyle="pageSheet">
-          <ReportAProblem onClose={() => setShowReportaproblem(false)} />
-        </Modal>
-
-        {/* App Version Modal */}
-        <Modal visible={showAppVersion} animationType="slide" presentationStyle="pageSheet">
-          <AppVersion onClose={() => setShowAppVersion(false)} />
-        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -177,4 +144,11 @@ const styles = StyleSheet.create({
     color: colors.primaryText,
     fontWeight: '500',
   },
+  currencyLogo: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.primaryText,
+  },
 });
+
+

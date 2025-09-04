@@ -11,45 +11,36 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { colors } from '../utils/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FAQs } from './FAQs';
-import { ContactSupport } from './ContactSupport';
-import { ReportAProblem } from './Reportaproblem';
-import { AppVersion } from './AppVersion';
+import { Fingerprint } from './Fingerprint';
+import { FaceID } from './FaceID';
 
-interface HelpandSupportProps {
+type AccountPrivacyProps = {
   onClose: () => void;
-}
+};
 
-export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
-  const [showFAQs, setShowFAQs] = useState(false);
-  const [showContactSupport, setShowContactSupport] = useState(false);
-  const [showReportaproblem, setShowReportaproblem] = useState(false);
-  const [showAppVersion, setShowAppVersion] = useState(false);
+type Option = {
+  id: number;
+  title: string;
+  icon: string;
+  onPress: () => void;
+};
 
-  const Helpoptions = [
+export const AccountPrivacy: React.FC<AccountPrivacyProps> = ({ onClose }) => {
+  const [showFingerprint, setShowFingerprint] = useState(false);
+  const [showFaceID, setShowFaceID] = useState(false);
+
+  const ApplockOptions: Option[] = [
     {
       id: 1,
-      title: 'FAQs',
-      icon: 'help-circle-outline',
-      onPress: () => setShowFAQs(true),
+      title: 'Fingerprint',
+      icon: 'finger-print',
+      onPress: () => setShowFingerprint(true),
     },
     {
       id: 2,
-      title: 'Contact Support',
-      icon: 'chatbox-ellipses-outline',
-      onPress: () => setShowContactSupport(true),
-    },
-    {
-      id: 3,
-      title: 'Report a problem',
-      icon: 'alert-circle-outline',
-      onPress: () => setShowReportaproblem(true),
-    },
-    {
-      id: 4,
-      title: 'App Version',
-      icon: 'apps-outline',
-      onPress: () => setShowAppVersion(true),
+      title: 'Face ID',
+      icon: 'eye',
+      onPress: () => setShowFaceID(true),
     },
   ];
 
@@ -62,49 +53,55 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
         <TouchableOpacity style={styles.backButton} onPress={onClose}>
           <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help & Support</Text>
+        <Text style={styles.headerTitle}>Account Privacy</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.text}>Help info and Support</Text>
-
-        {Helpoptions.map(item => (
+        <Text style={styles.text}>App Lock</Text>
+        {ApplockOptions.map(item => (
           <TouchableOpacity
             key={item.id}
             style={styles.option}
             onPress={item.onPress}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+          >
             <View style={styles.optionLeft}>
               <View style={styles.optionIconContainer}>
-                <Ionicons name={item.icon} size={20} color={colors.inactiveIcon} />
+                <Ionicons
+                  name={item.icon}
+                  size={20}
+                  color={colors.activeIcon}
+                />
               </View>
               <View style={styles.optionTextContainer}>
                 <Text style={styles.optionTitle}>{item.title}</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.inactiveIcon} />
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.inactiveIcon}
+            />
           </TouchableOpacity>
         ))}
 
-        {/* FAQs Modal */}
-        <Modal visible={showFAQs} animationType="slide" presentationStyle="pageSheet">
-          <FAQs onClose={() => setShowFAQs(false)} />
+        {/* Fingerprint Modal */}
+        <Modal
+          visible={showFingerprint}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <Fingerprint onClose={() => setShowFingerprint(false)} />
         </Modal>
 
-        {/* Contact Support Modal */}
-        <Modal visible={showContactSupport} animationType="slide" presentationStyle="pageSheet">
-          <ContactSupport onClose={() => setShowContactSupport(false)} />
-        </Modal>
-
-        {/* Report a problem Modal */}
-        <Modal visible={showReportaproblem} animationType="slide" presentationStyle="pageSheet">
-          <ReportAProblem onClose={() => setShowReportaproblem(false)} />
-        </Modal>
-
-        {/* App Version Modal */}
-        <Modal visible={showAppVersion} animationType="slide" presentationStyle="pageSheet">
-          <AppVersion onClose={() => setShowAppVersion(false)} />
+        {/* Face ID Modal */}
+        <Modal
+          visible={showFaceID}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <FaceID onClose={() => setShowFaceID(false)} />
         </Modal>
       </ScrollView>
     </SafeAreaView>
@@ -124,6 +121,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.secondaryText,
+    backgroundColor: colors.background,
   },
   backButton: {
     padding: 4,
@@ -178,3 +176,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+

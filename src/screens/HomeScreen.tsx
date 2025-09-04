@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CreateNewGroupScreen } from './CreateNewGroupScreen';
 import { colors } from '../utils/colors';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 interface GroupDetail {
   text: string;
@@ -158,10 +159,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <Text style={styles.headerTitle}>My Groups</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerButton} onPress={handleSearch}>
-            <Text style={{ fontSize: 20 }}>{showSearchBar ? '🔍' : '🔎'}</Text>
+            <MaterialIcons
+              name={showSearchBar ? 'close' : 'search'}
+              size={24}
+              color={colors.primaryText}
+            />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={handleAddGroup}>
-            <Text style={{ fontSize: 20 }}>➕</Text>
+            <MaterialIcons name="add" size={24} color={colors.primaryText} />
           </TouchableOpacity>
         </View>
       </View>
@@ -187,7 +192,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 120 }} // enough space for tab bar + floating button
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Overall Balance */}
@@ -215,7 +220,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         {/* Groups List */}
         {filteredGroups.map(group => (
-          <TouchableOpacity key={group.id} style={styles.groupCard}>
+          <TouchableOpacity
+            key={group.id}
+            style={styles.groupCard}
+            onPress={() => navigation.navigate('GroupDetailScreen', { group })}
+          >
             <View style={styles.groupHeader}>
               <View style={styles.avatarContainer}>
                 {group.coverImageUrl ? (
@@ -235,7 +244,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   </Text>
                 </View>
               ))}
-              {group.moreBalances ? <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text> : null}
+              {group.moreBalances ? (
+                <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
+              ) : null}
             </View>
           </TouchableOpacity>
         ))}
@@ -243,7 +254,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* Floating Button */}
       <TouchableOpacity style={styles.floatingButton} onPress={handleAddGroup}>
-        <Text style={{ color: colors.primaryButtonText, fontSize: 28 }}>➕</Text>
+        <MaterialIcons name="add" size={28} color={colors.primaryButtonText} />
       </TouchableOpacity>
 
       {/* Create New Group Modal */}
@@ -314,7 +325,7 @@ const createStyles = () =>
     moreBalances: { color: colors.secondaryText },
     floatingButton: {
       position: 'absolute',
-      bottom: 80, // space above tab bar
+      bottom: 80,
       right: 24,
       width: 60,
       height: 60,

@@ -10,14 +10,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { EditProfileScreen } from './EditProfileScreen';
-import ThemeSettingsScreen from './ThemeSettingsScreen';
-import PaymentHistoryScreen from './PaymentHistoryScreen';
-import ReferralSystemScreen from './ReferralSystemScreen';
-import Settings from './Settings';
-import HelpandSupport from './HelpandSupport';
+import { ThemeSettingsScreen } from './ThemeSettingsScreen';
+import { PaymentHistoryScreen } from './PaymentHistoryScreen';
+import { ReferralSystemScreen } from './ReferralSystemScreen';
+import { Settings } from './Settings';
+import { HelpandSupport } from './HelpandSupport';
 import { colors } from '../utils/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationProps } from '../types/navigation';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 interface UserProfile {
   firstName: string;
@@ -46,12 +47,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   };
 
   const menuItems = [
-    { id: 1, title: '🎨 Theme Setting', onPress: () => setShowThemeSettings(true) },
-    { id: 2, title: '💳 Payments', onPress: () => setShowPaymentHistory(true) },
-    { id: 3, title: '⚙️ Settings', onPress: () => setShowSettings(true) },
-    { id: 4, title: '🎁 Referral System', onPress: () => setShowReferralSystem(true) },
-    { id: 5, title: '❓ Help & Support', onPress: () => setShowHelpandSupport(true) },
-    { id: 6, title: '🚪 Logout', onPress: () => console.log('Logout pressed') },
+    { id: 1, title: 'Theme Setting', icon: 'palette', onPress: () => setShowThemeSettings(true) },
+    { id: 2, title: 'Payments', icon: 'credit-card', onPress: () => setShowPaymentHistory(true) },
+    { id: 3, title: 'Settings', icon: 'settings', onPress: () => setShowSettings(true) },
+    { id: 4, title: 'Referral System', icon: 'card-giftcard', onPress: () => setShowReferralSystem(true) },
+    { id: 5, title: 'Help & Support', icon: 'help-outline', onPress: () => setShowHelpandSupport(true) },
+    { id: 6, title: 'Logout', icon: 'logout', onPress: () => console.log('Logout pressed') },
   ];
 
   const styles = createStyles();
@@ -106,7 +107,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
               onPress={item.onPress}
               activeOpacity={0.7}
             >
-              <Text style={styles.menuTitle}>{item.title}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialIcons name={item.icon} size={24} color={colors.primaryText} style={{ marginRight: 16 }} />
+                <Text style={styles.menuTitle}>{item.title}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
