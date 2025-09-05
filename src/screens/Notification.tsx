@@ -9,7 +9,7 @@ import {
   Switch,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type NotificationOption = {
@@ -23,6 +23,7 @@ type NotificationsProps = {
 };
 
 export const Notifications: React.FC<NotificationsProps> = ({ onClose }) => {
+  const { colors } = useTheme();
   const [isEnabled, setIsEnabled] = useState<boolean>(false);
   const [notifymeOptions, setNotifyMeOptions] = useState<NotificationOption[]>([
     { id: 1, title: 'When I am added to a group', isEnabled: false },
@@ -39,6 +40,71 @@ export const Notifications: React.FC<NotificationsProps> = ({ onClose }) => {
       ),
     );
   };
+
+  const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
+    },
+    backButton: { padding: 8 },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
+    },
+    placeholder: { width: 40 },
+    scrollView: { flex: 1 },
+    scrollContent: { padding: 20 },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    text: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+    },
+    switch: { transform: [{ scaleX: 1 }, { scaleY: 1 }] },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 12,
+    },
+    Subtext: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.inputBackground,
+      shadowColor: colors.primaryText,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    SubtextTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      flex: 1,
+      paddingRight: 8,
+    },
+    SubtextSwitch: { padding: 4 },
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -96,69 +162,3 @@ export const Notifications: React.FC<NotificationsProps> = ({ onClose }) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.secondaryText,
-  },
-  backButton: { padding: 8 },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.primaryText,
-  },
-  placeholder: { width: 40 },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 20 },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  text: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
-  },
-  switch: { transform: [{ scaleX: 1 }, { scaleY: 1 }] },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
-    marginBottom: 12,
-  },
-  Subtext: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.inputBackground,
-    shadowColor: colors.primaryText,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  SubtextTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
-    flex: 1,
-    paddingRight: 8,
-  },
-  SubtextSwitch: { padding: 4 },
-});
-

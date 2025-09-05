@@ -8,7 +8,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface AppVersionProps {
@@ -16,6 +16,8 @@ interface AppVersionProps {
 }
 
 export const AppVersion: React.FC<AppVersionProps> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
@@ -36,7 +38,7 @@ export const AppVersion: React.FC<AppVersionProps> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

@@ -13,7 +13,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { launchImageLibrary, Asset, ImageLibraryOptions } from 'react-native-image-picker';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface EditProfileScreenProps {
@@ -21,6 +21,7 @@ interface EditProfileScreenProps {
 }
 
 export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose }) => {
+  const { colors } = useTheme();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -92,6 +93,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
     });
   };
 
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -242,7 +244,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

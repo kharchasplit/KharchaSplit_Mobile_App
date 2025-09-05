@@ -11,7 +11,7 @@ import {
   StatusBar,
   Animated,
 } from 'react-native';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 
 interface ProfileSetupScreenProps {
   navigation: any;
@@ -23,6 +23,8 @@ interface ProfileSetupScreenProps {
 }
 
 export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   navigation,
   route,
 }) => {
@@ -167,7 +169,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

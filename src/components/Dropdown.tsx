@@ -9,7 +9,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 
 interface DropdownOption {
   label?: string;
@@ -52,6 +52,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
   valueKey = 'value' as keyof DropdownOption,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
+  const { colors } = useTheme();
 
   const handleSelect = (item: DropdownOption) => {
     onSelect(item);
@@ -65,7 +66,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
     return val[displayKey] ?? val.name ?? val.label ?? String(val);
   };
 
-  const styles = createStyles();
+  const styles = createStyles(colors);
 
   const defaultRenderItem = ({ item }: { item: DropdownOption }): React.ReactElement | null => (
     <TouchableOpacity
@@ -143,7 +144,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
   );
 };
 
-const createStyles = () =>
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: {
       marginBottom: 16,

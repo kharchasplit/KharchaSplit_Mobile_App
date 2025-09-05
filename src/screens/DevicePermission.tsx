@@ -9,7 +9,7 @@ import {
   Switch,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Permission = {
@@ -24,6 +24,8 @@ type DevicePermissionProps = {
 };
 
 export const DevicePermission: React.FC<DevicePermissionProps> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [permissions, setPermissions] = useState<Permission[]>([
     { id: 1, title: 'Camera', icon: 'camera', enabled: false },
     { id: 2, title: 'Photos', icon: 'images', enabled: false },
@@ -83,7 +85,7 @@ export const DevicePermission: React.FC<DevicePermissionProps> = ({ onClose }) =
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

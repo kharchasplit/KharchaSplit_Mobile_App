@@ -9,7 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FAQs } from './FAQs';
 import { ContactSupport } from './ContactSupport';
@@ -21,6 +21,8 @@ interface HelpandSupportProps {
 }
 
 export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [showFAQs, setShowFAQs] = useState(false);
   const [showContactSupport, setShowContactSupport] = useState(false);
   const [showReportaproblem, setShowReportaproblem] = useState(false);
@@ -111,7 +113,7 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

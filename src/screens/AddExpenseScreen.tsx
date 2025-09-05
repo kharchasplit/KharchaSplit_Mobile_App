@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import { colors } from "../utils/colors";
+import { useTheme } from '../context/ThemeContext';
 import { launchImageLibrary } from "react-native-image-picker";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -33,6 +33,7 @@ interface AddExpenseScreenProps {
 }
 
 export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navigation }) => {
+  const { colors } = useTheme();
   const { group } = route.params || {};
 
   const [description, setDescription] = useState("");
@@ -177,6 +178,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
     }
   };
 
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -223,7 +225,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: "row",

@@ -11,7 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type DeleteAccountProps = {
@@ -26,11 +26,12 @@ const CONSEQUENCES = [
 ] as const;
 
 export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
+  const { colors } = useTheme();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  const styles = useMemo(() => createStyles(), []);
+  const styles = useMemo(() => createStyles(colors), []);
 
   const validatePassword = useCallback((pwd: string) => {
     if (!pwd.trim()) {

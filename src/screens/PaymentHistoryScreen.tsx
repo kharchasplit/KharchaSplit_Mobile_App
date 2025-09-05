@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Payment {
@@ -32,6 +32,8 @@ interface Props {
 }
 
 export const PaymentHistoryScreen: React.FC<Props> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [paymentHistory] = useState<Payment[]>([
     {
       id: '1',
@@ -265,7 +267,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',

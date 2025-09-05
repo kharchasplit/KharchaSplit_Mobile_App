@@ -14,7 +14,7 @@ import {
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Contacts from 'react-native-contacts';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors'; // Import your color object
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Group {
@@ -39,6 +39,7 @@ interface Props {
 }
 
 export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
+  const { colors } = useTheme();
   const { group } = route.params || {};
 
   const [selectedMembers, setSelectedMembers] = useState<Contact[]>([]);
@@ -95,7 +96,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
         thumbnailPath: contact.thumbnailPath,
         isRegistered: false,
         userId: null,
-        userInfo: null
+        userInfo: null,
       }));
       setContacts(mappedContacts);
     } catch (error) {
@@ -128,28 +129,28 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles(colors).container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+      <View style={styles(colors).header}>
+        <TouchableOpacity style={styles(colors).backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Members</Text>
-        <View style={styles.placeholder} />
+        <Text style={styles(colors).headerTitle}>Add Members</Text>
+        <View style={styles(colors).placeholder} />
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles(colors).scrollView}>
         {/* Group Info */}
-        <View style={styles.groupInfo}>
-          <Text style={styles.groupName}>{group?.name}</Text>
-          <Text style={styles.groupDescription}>Add new members to this group</Text>
+        <View style={styles(colors).groupInfo}>
+          <Text style={styles(colors).groupName}>{group?.name}</Text>
+          <Text style={styles(colors).groupDescription}>Add new members to this group</Text>
         </View>
 
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
+        <View style={styles(colors).searchContainer}>
           <Ionicons name="search" size={20} color={colors.secondaryText} />
           <TextInput
-            style={styles.searchInput}
+            style={styles(colors).searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search Person or Phone Number"
@@ -166,19 +167,19 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           filteredContacts.map(contact => (
             <TouchableOpacity
               key={contact.recordID}
-              style={styles.contactItem}
+              style={styles(colors).contactItem}
               onPress={() => handleSelectMember(contact)}
             >
               {contact.thumbnailPath ? (
-                <Image source={{ uri: contact.thumbnailPath }} style={styles.contactImage} />
+                <Image source={{ uri: contact.thumbnailPath }} style={styles(colors).contactImage} />
               ) : (
-                <View style={styles.contactImagePlaceholder}>
-                  <Text style={styles.contactImagePlaceholderText}>
+                <View style={styles(colors).contactImagePlaceholder}>
+                  <Text style={styles(colors).contactImagePlaceholderText}>
                     {contact.displayName.charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
-              <Text style={styles.contactName}>{contact.displayName}</Text>
+              <Text style={styles(colors).contactName}>{contact.displayName}</Text>
             </TouchableOpacity>
           ))
         )}
@@ -187,11 +188,11 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
       {/* Add Button */}
       {selectedMembers.length > 0 && (
         <TouchableOpacity
-          style={[styles.addButton, loading && { opacity: 0.6 }]}
+          style={[styles(colors).addButton, loading && { opacity: 0.6 }]}
           onPress={handleAddMembers}
           disabled={loading}
         >
-          <Text style={styles.addButtonText}>
+          <Text style={styles(colors).addButtonText}>
             Add {selectedMembers.length} Member{selectedMembers.length > 1 ? 's' : ''}
           </Text>
         </TouchableOpacity>
@@ -200,61 +201,61 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.secondaryText,
-  },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
-  placeholder: { width: 40 },
-  scrollView: { flex: 1 },
-  groupInfo: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.secondaryText },
-  groupName: { fontSize: 20, fontWeight: '600', color: colors.primaryText },
-  groupDescription: { fontSize: 14, color: colors.secondaryText },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.cardBackground,
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    margin: 16,
-  },
-  searchInput: { flex: 1, fontSize: 16, color: colors.inputText, marginLeft: 8 },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.secondaryText,
-  },
-  contactImage: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
-  contactImagePlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.activeIcon,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  contactImagePlaceholderText: { color: colors.primaryText, fontWeight: 'bold' },
-  contactName: { color: colors.primaryText },
-  addButton: {
-    backgroundColor: colors.primaryButton,
-    padding: 16,
-    margin: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  addButtonText: { color: colors.primaryButtonText, fontWeight: '600' },
-});
-
+const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
+    },
+    backButton: { padding: 8 },
+    headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
+    placeholder: { width: 40 },
+    scrollView: { flex: 1 },
+    groupInfo: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.secondaryText },
+    groupName: { fontSize: 20, fontWeight: '600', color: colors.primaryText },
+    groupDescription: { fontSize: 14, color: colors.secondaryText },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 25,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      margin: 16,
+    },
+    searchInput: { flex: 1, fontSize: 16, color: colors.inputText, marginLeft: 8 },
+    contactItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
+    },
+    contactImage: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+    contactImagePlaceholder: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.activeIcon,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    contactImagePlaceholderText: { color: colors.primaryText, fontWeight: 'bold' },
+    contactName: { color: colors.primaryText },
+    addButton: {
+      backgroundColor: colors.primaryButton,
+      padding: 16,
+      margin: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    addButtonText: { color: colors.primaryButtonText, fontWeight: '600' },
+  });

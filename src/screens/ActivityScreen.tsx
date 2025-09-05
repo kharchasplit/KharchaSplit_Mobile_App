@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Activity {
@@ -26,6 +26,7 @@ interface ActivityScreenProps {
 }
 
 export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) => {
+  const { colors } = useTheme();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,7 +104,7 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
     }
   };
 
-  const styles = createStyles();
+  const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -169,7 +170,7 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
   );
 };
 
-const createStyles = () =>
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {

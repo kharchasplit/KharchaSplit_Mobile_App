@@ -14,8 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../services/authService';
-import { colors } from '../utils/colors';
-
+import { useTheme } from '../context/ThemeContext';
 
 interface OTPVerificationScreenProps {
   navigation: any;
@@ -30,13 +29,16 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   navigation,
   route,
 }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { phoneNumber } = route.params;
   const [otp, setOTP] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [activeIndex, setActiveIndex] = useState(0);
-  
+
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   // Countdown timer
@@ -58,13 +60,11 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
   const handleOTPChange = (text: string, index: number) => {
     const numericText = text.replace(/[^0-9]/g, '');
-    
     if (numericText.length <= 1) {
       const newOTP = [...otp];
       newOTP[index] = numericText;
       setOTP(newOTP);
-      
-      // Auto-focus next input
+
       if (numericText && index < 5) {
         inputRefs.current[index + 1]?.focus();
         setActiveIndex(index + 1);
@@ -81,29 +81,26 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
   const handleVerifyOTP = async () => {
     const otpValue = otp.join('');
-    if (otpValue.length !== 6) {
-      return;
-    }
+    if (otpValue.length !== 6) return;
 
     setLoading(true);
     try {
       const isValid = await authService.verifyOTP(phoneNumber, otpValue);
-      
       if (isValid) {
         await authService.clearOTP(phoneNumber);
-        
+
         const userExists = await authService.checkUserExists(phoneNumber);
-        
+
         if (userExists) {
           const { firebaseService } = await import('../services/firebaseService');
           const { userStorage } = await import('../services/userStorage');
-          
+
           const userProfile = await firebaseService.getUserByPhone(phoneNumber);
           if (userProfile) {
             await userStorage.saveUser(userProfile);
             await userStorage.saveAuthToken(userProfile.id);
           }
-          
+
           navigation.navigate('Home');
         } else {
           navigation.navigate('ProfileSetup', { phoneNumber });
@@ -150,8 +147,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-      
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
@@ -176,14 +172,16 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
                 ]}
               >
                 <TextInput
-                  ref={(ref) => { inputRefs.current[index] = ref; }}
+                  ref={ref => (inputRefs.current[index] = ref)}
                   style={[
                     styles.otpInput,
                     activeIndex === index && styles.otpInputActive,
                   ]}
                   value={digit}
-                  onChangeText={(text) => handleOTPChange(text, index)}
-                  onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
+                  onChangeText={text => handleOTPChange(text, index)}
+                  onKeyPress={({ nativeEvent }) =>
+                    handleKeyPress(nativeEvent.key, index)
+                  }
                   onFocus={() => setActiveIndex(index)}
                   keyboardType="numeric"
                   maxLength={1}
@@ -210,10 +208,12 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             {loading ? (
               <ActivityIndicator size="small" color={colors.primaryButtonText} />
             ) : (
-              <Text style={[
-                styles.verifyButtonText,
-                otpComplete && styles.verifyButtonTextActive,
-              ]}>
+              <Text
+                style={[
+                  styles.verifyButtonText,
+                  otpComplete && styles.verifyButtonTextActive,
+                ]}
+              >
                 {otpComplete ? 'Verify Code' : 'Enter 6-digit code'}
               </Text>
             )}
@@ -241,7 +241,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           </View>
 
           {/* Footer */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.changeNumberButton}
             onPress={() => navigation.goBack()}
           >
@@ -253,118 +253,119 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 20,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 50,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primaryText,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.secondaryText,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 40,
-  },
-  otpBox: {
-    width: 50,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: colors.cardBackground,
-    borderWidth: 2,
-    borderColor: 'rgba(103, 111, 157, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpBoxActive: {
-    borderColor: colors.activeIcon,
-    backgroundColor: colors.cardBackground,
-  },
-  otpBoxFilled: {
-    borderColor: colors.activeIcon,
-    backgroundColor: colors.cardBackground,
-  },
-  otpInput: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.primaryText,
-    width: '100%',
-    height: '100%',
-    textAlign: 'center',
-  },
-  otpInputActive: {
-    color: colors.primaryText,
-  },
-  verifyButton: {
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.cardBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  verifyButtonActive: {
-    backgroundColor: colors.activeIcon,
-  },
-  verifyButtonDisabled: {
-    opacity: 0.6,
-  },
-  verifyButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.secondaryText,
-  },
-  verifyButtonTextActive: {
-    color: colors.primaryButtonText,
-  },
-  resendContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  countdownText: {
-    fontSize: 16,
-    color: colors.secondaryText,
-  },
-  resendButton: {
-    paddingVertical: 8,
-  },
-  resendText: {
-    fontSize: 16,
-    color: colors.activeIcon,
-    fontWeight: '600',
-  },
-  changeNumberButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  changeNumberText: {
-    fontSize: 16,
-    color: colors.secondaryText,
-    textDecorationLine: 'underline',
-  },
-});
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: 24,
+      paddingTop: 40,
+      paddingBottom: 20,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: 50,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.primaryText,
+      textAlign: 'center',
+      marginBottom: 12,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    otpContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 40,
+    },
+    otpBox: {
+      width: 50,
+      height: 60,
+      borderRadius: 12,
+      backgroundColor: colors.cardBackground,
+      borderWidth: 2,
+      borderColor: 'rgba(103, 111, 157, 0.3)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    otpBoxActive: {
+      borderColor: colors.activeIcon,
+      backgroundColor: colors.cardBackground,
+    },
+    otpBoxFilled: {
+      borderColor: colors.activeIcon,
+      backgroundColor: colors.cardBackground,
+    },
+    otpInput: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: colors.primaryText,
+      width: '100%',
+      height: '100%',
+      textAlign: 'center',
+    },
+    otpInputActive: {
+      color: colors.primaryText,
+    },
+    verifyButton: {
+      height: 56,
+      borderRadius: 16,
+      backgroundColor: colors.cardBackground,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 30,
+    },
+    verifyButtonActive: {
+      backgroundColor: colors.activeIcon,
+    },
+    verifyButtonDisabled: {
+      opacity: 0.6,
+    },
+    verifyButtonText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.secondaryText,
+    },
+    verifyButtonTextActive: {
+      color: colors.primaryButtonText,
+    },
+    resendContainer: {
+      alignItems: 'center',
+      marginBottom: 30,
+    },
+    countdownText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+    },
+    resendButton: {
+      paddingVertical: 8,
+    },
+    resendText: {
+      fontSize: 16,
+      color: colors.activeIcon,
+      fontWeight: '600',
+    },
+    changeNumberButton: {
+      alignItems: 'center',
+      paddingVertical: 12,
+    },
+    changeNumberText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      textDecorationLine: 'underline',
+    },
+  });

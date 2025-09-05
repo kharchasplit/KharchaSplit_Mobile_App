@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import {colors} from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
 type Group = any;
@@ -35,6 +35,7 @@ interface Props {
 }
 
 export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
+  const { colors } = useTheme();
   const {group} = route.params;
   const currentUserId = route.params?.currentUserId ?? null;
 
@@ -368,8 +369,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
     }
   };
 
-  const styles = createStyles();
-
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -555,7 +555,7 @@ function calculateSettlementsPlaceholder(
   return arr;
 }
 
-const createStyles = () =>
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: {flex: 1, backgroundColor: colors.background},
     header: {

@@ -9,7 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Fingerprint } from './Fingerprint';
@@ -27,6 +27,8 @@ type Option = {
 };
 
 export const AccountPrivacy: React.FC<AccountPrivacyProps> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [showFingerprint, setShowFingerprint] = useState(false);
   const [showFaceID, setShowFaceID] = useState(false);
 
@@ -105,7 +107,7 @@ export const AccountPrivacy: React.FC<AccountPrivacyProps> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

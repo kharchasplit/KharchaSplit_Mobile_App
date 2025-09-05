@@ -13,7 +13,7 @@ import {
 import Clipboard from '@react-native-clipboard/clipboard';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ReferralHistoryItem = {
@@ -36,6 +36,7 @@ type Props = {
 };
 
 export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
+  const { colors } = useTheme();
   const [referralData, setReferralData] = useState<ReferralData>({
     code: 'SP123456',
     totalReferrals: 0,
@@ -148,7 +149,7 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
     }
   };
 
-  const styles = createStyles();
+  const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -286,7 +287,7 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
   );
 };
 
-const createStyles = () =>
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -469,4 +470,3 @@ const createStyles = () =>
       textTransform: 'capitalize',
     },
   });
-

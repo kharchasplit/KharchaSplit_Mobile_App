@@ -8,7 +8,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ThemeOption {
@@ -23,7 +23,8 @@ interface ThemeSettingsScreenProps {
 }
 
 export const ThemeSettingsScreen: React.FC<ThemeSettingsScreenProps> = ({ onClose }) => {
-  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>('light');
+  const { mode, setMode, colors } = useTheme();
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(mode);
 
   const themeOptions: ThemeOption[] = [
     {
@@ -70,38 +71,39 @@ export const ThemeSettingsScreen: React.FC<ThemeSettingsScreenProps> = ({ onClos
 
   const handleThemeSelect = (themeId: 'light' | 'dark' | 'system') => {
     setThemeMode(themeId);
+    setMode(themeId);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles(colors).container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onClose}>
+      <View style={styles(colors).header}>
+        <TouchableOpacity style={styles(colors).backButton} onPress={onClose}>
           <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Theme Settings</Text>
-        <View style={styles.placeholder} />
+        <Text style={styles(colors).headerTitle}>Theme Settings</Text>
+        <View style={styles(colors).placeholder} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles(colors).scrollView} showsVerticalScrollIndicator={false}>
         {/* Current Theme Info */}
-        <View style={styles.currentThemeSection}>
-          <Text style={styles.sectionTitle}>Current Theme</Text>
-          <View style={styles.currentThemeCard}>
-            <View style={styles.currentThemeIcon}>
+        <View style={styles(colors).currentThemeSection}>
+          <Text style={styles(colors).sectionTitle}>Current Theme</Text>
+          <View style={styles(colors).currentThemeCard}>
+            <View style={styles(colors).currentThemeIcon}>
               <Ionicons
                 name={getThemeIcon(themeMode)}
                 size={24}
                 color={colors.activeIcon}
               />
             </View>
-            <View style={styles.currentThemeInfo}>
-              <Text style={styles.currentThemeName}>
+            <View style={styles(colors).currentThemeInfo}>
+              <Text style={styles(colors).currentThemeName}>
                 {getThemeDisplayName(themeMode)}
               </Text>
-              <Text style={styles.currentThemeDescription}>
+              <Text style={styles(colors).currentThemeDescription}>
                 {themeMode === 'system'
                   ? 'Automatically adapts to your device settings'
                   : `Using ${themeMode} theme across the app`}
@@ -111,23 +113,23 @@ export const ThemeSettingsScreen: React.FC<ThemeSettingsScreenProps> = ({ onClos
         </View>
 
         {/* Theme Options */}
-        <View style={styles.optionsSection}>
-          <Text style={styles.sectionTitle}>Choose Theme</Text>
+        <View style={styles(colors).optionsSection}>
+          <Text style={styles(colors).sectionTitle}>Choose Theme</Text>
 
           {themeOptions.map(option => (
             <TouchableOpacity
               key={option.id}
               style={[
-                styles.themeOption,
-                themeMode === option.id && styles.themeOptionSelected,
+                styles(colors).themeOption,
+                themeMode === option.id && styles(colors).themeOptionSelected,
               ]}
               onPress={() => handleThemeSelect(option.id)}
               activeOpacity={0.7}>
-              <View style={styles.themeOptionLeft}>
+              <View style={styles(colors).themeOptionLeft}>
                 <View
                   style={[
-                    styles.themeOptionIcon,
-                    themeMode === option.id && styles.themeOptionIconSelected,
+                    styles(colors).themeOptionIcon,
+                    themeMode === option.id && styles(colors).themeOptionIconSelected,
                   ]}>
                   <Ionicons
                     name={option.icon}
@@ -139,22 +141,22 @@ export const ThemeSettingsScreen: React.FC<ThemeSettingsScreenProps> = ({ onClos
                     }
                   />
                 </View>
-                <View style={styles.themeOptionInfo}>
+                <View style={styles(colors).themeOptionInfo}>
                   <Text
                     style={[
-                      styles.themeOptionName,
-                      themeMode === option.id && styles.themeOptionNameSelected,
+                      styles(colors).themeOptionName,
+                      themeMode === option.id && styles(colors).themeOptionNameSelected,
                     ]}>
                     {option.name}
                   </Text>
-                  <Text style={styles.themeOptionDescription}>
+                  <Text style={styles(colors).themeOptionDescription}>
                     {option.description}
                   </Text>
                 </View>
               </View>
 
               {themeMode === option.id && (
-                <View style={styles.selectedIndicator}>
+                <View style={styles(colors).selectedIndicator}>
                   <Ionicons
                     name="checkmark-circle"
                     size={20}
@@ -167,35 +169,35 @@ export const ThemeSettingsScreen: React.FC<ThemeSettingsScreenProps> = ({ onClos
         </View>
 
         {/* Theme Preview */}
-        <View style={styles.previewSection}>
-          <Text style={styles.sectionTitle}>Preview</Text>
-          <View style={styles.previewCard}>
-            <View style={styles.previewHeader}>
-              <Text style={styles.previewHeaderText}>App Preview</Text>
-              <View style={styles.previewHeaderIcon}>
+        <View style={styles(colors).previewSection}>
+          <Text style={styles(colors).sectionTitle}>Preview</Text>
+          <View style={styles(colors).previewCard}>
+            <View style={styles(colors).previewHeader}>
+              <Text style={styles(colors).previewHeaderText}>App Preview</Text>
+              <View style={styles(colors).previewHeaderIcon}>
                 <Ionicons name="eye" size={16} color={colors.activeIcon} />
               </View>
             </View>
-            <View style={styles.previewContent}>
-              <Text style={styles.previewText}>
+            <View style={styles(colors).previewContent}>
+              <Text style={styles(colors).previewText}>
                 This is how your app will look with the selected theme.
               </Text>
-              <View style={styles.previewButton}>
-                <Text style={styles.previewButtonText}>Sample Button</Text>
+              <View style={styles(colors).previewButton}>
+                <Text style={styles(colors).previewButtonText}>Sample Button</Text>
               </View>
             </View>
           </View>
         </View>
 
         {/* Info Section */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoCard}>
+        <View style={styles(colors).infoSection}>
+          <View style={styles(colors).infoCard}>
             <Ionicons
               name="information-circle"
               size={20}
               color={colors.secondaryText}
             />
-            <Text style={styles.infoText}>
+            <Text style={styles(colors).infoText}>
               Theme changes will be applied immediately and saved for future app
               launches.
             </Text>
@@ -206,7 +208,7 @@ export const ThemeSettingsScreen: React.FC<ThemeSettingsScreenProps> = ({ onClos
   );
 };
 
-const styles = StyleSheet.create({
+const styles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

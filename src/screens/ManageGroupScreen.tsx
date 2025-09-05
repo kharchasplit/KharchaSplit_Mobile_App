@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary, ImageLibraryOptions } from 'react-native-image-picker';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Types
@@ -39,6 +39,7 @@ interface ManageGroupScreenProps {
 }
 
 export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, navigation }) => {
+  const { colors } = useTheme();
   const { group } = route.params || {};
 
   const [groupData, setGroupData] = useState({
@@ -51,7 +52,7 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [isGroupAdmin, setIsGroupAdmin] = useState(true); // For demo, assume user is admin
+  const [isGroupAdmin, setIsGroupAdmin] = useState(true); // Mocked as true for demo
   const [groupMembers, setGroupMembers] = useState<Member[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -99,11 +100,7 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
 
     Alert.alert('Update Cover Image', 'Choose an option', [
       { text: 'Gallery', onPress: () => openImagePicker() },
-      {
-        text: 'Remove Image',
-        onPress: () => removeCoverImage(),
-        style: 'destructive',
-      },
+      { text: 'Remove Image', onPress: () => removeCoverImage(), style: 'destructive' },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -173,6 +170,75 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
   const filteredMembers = groupMembers.filter(member =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
+    },
+    backButton: { padding: 8 },
+    headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
+    placeholder: { width: 40 },
+    scrollView: { flex: 1 },
+    coverImageSection: { alignItems: 'center', paddingVertical: 24 },
+    coverImageContainer: { borderRadius: 60, overflow: 'hidden' },
+    coverImage: { width: 120, height: 120, borderRadius: 60 },
+    placeholderContainer: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: colors.cardBackground,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    groupAvatar: { fontSize: 40 },
+    placeholderText: { fontSize: 12, color: colors.secondaryText },
+    inputGroup: { paddingHorizontal: 16, marginBottom: 16 },
+    label: { fontSize: 14, color: colors.secondaryText, marginBottom: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.secondaryText,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: colors.inputText,
+      backgroundColor: colors.inputBackground,
+    },
+    descriptionInput: { height: 80, textAlignVertical: 'top' },
+    membersSection: { padding: 16 },
+    sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 12 },
+    memberItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    memberAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+    memberAvatarPlaceholder: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primaryButton,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    memberAvatarText: { color: colors.primaryText, fontWeight: 'bold' },
+    memberName: { flex: 1, fontSize: 14, color: colors.primaryText },
+    saveButton: {
+      backgroundColor: colors.primaryButton,
+      margin: 16,
+      paddingVertical: 14,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    saveButtonText: { color: colors.primaryButtonText, fontWeight: '600' },
+    saveButtonDisabled: { backgroundColor: colors.secondaryText },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingText: { color: colors.secondaryText, marginTop: 12 },
+  });
 
   if (loading) {
     return (
@@ -261,7 +327,9 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
                 <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
               ) : (
                 <View style={styles.memberAvatarPlaceholder}>
-                  <Text style={styles.memberAvatarText}>{member.name.charAt(0).toUpperCase()}</Text>
+                  <Text style={styles.memberAvatarText}>
+                    {member.name.charAt(0).toUpperCase()}
+                  </Text>
                 </View>
               )}
               <Text style={styles.memberName}>{member.name}</Text>
@@ -280,79 +348,13 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
           onPress={handleSave}
           disabled={saving}
         >
-          {saving ? <ActivityIndicator size="small" color={colors.primaryText} /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.primaryText} />
+          ) : (
+            <Text style={styles.saveButtonText}>Save Changes</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.secondaryText,
-  },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
-  placeholder: { width: 40 },
-  scrollView: { flex: 1 },
-  coverImageSection: { alignItems: 'center', paddingVertical: 24 },
-  coverImageContainer: { borderRadius: 60, overflow: 'hidden' },
-  coverImage: { width: 120, height: 120, borderRadius: 60 },
-  placeholderContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.cardBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  groupAvatar: { fontSize: 40 },
-  placeholderText: { fontSize: 12, color: colors.secondaryText },
-  inputGroup: { paddingHorizontal: 16, marginBottom: 16 },
-  label: { fontSize: 14, color: colors.secondaryText, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.secondaryText,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.inputText,
-    backgroundColor: colors.inputBackground,
-  },
-  descriptionInput: { height: 80, textAlignVertical: 'top' },
-  membersSection: { padding: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 12 },
-  memberItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  memberAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
-  memberAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primaryButton,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  memberAvatarText: { color: colors.primaryText, fontWeight: 'bold' },
-  memberName: { flex: 1, fontSize: 14, color: colors.primaryText },
-  saveButton: {
-    backgroundColor: colors.primaryButton,
-    margin: 16,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: { color: colors.primaryButtonText, fontWeight: '600' },
-  saveButtonDisabled: { backgroundColor: colors.secondaryText },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: colors.secondaryText, marginTop: 12 },
-});
-

@@ -15,7 +15,7 @@ import { launchImageLibrary, ImageLibraryOptions, Asset } from 'react-native-ima
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Contacts, { Contact } from 'react-native-contacts';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface GroupData {
@@ -30,6 +30,7 @@ interface CreateNewGroupScreenProps {
 }
 
 export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onClose, onSave }) => {
+  const { colors } = useTheme();
   const [groupData, setGroupData] = useState<GroupData>({
     name: '',
     description: '',
@@ -149,8 +150,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     contact.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const styles = createStyles();
-
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -254,7 +254,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   );
 };
 
-const createStyles = () =>
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {

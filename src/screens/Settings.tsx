@@ -9,7 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Notifications } from './Notification';
@@ -24,6 +24,7 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
+  const { colors } = useTheme();
   const [showNotification, setShowNotification] = useState(false);
   const [showAccountPrivacy, setShowAccountPrivacy] = useState(false);
   const [showDevicePermission, setShowDevicePermission] = useState(false);
@@ -63,6 +64,7 @@ export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     },
   ];
 
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
@@ -124,7 +126,7 @@ export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',

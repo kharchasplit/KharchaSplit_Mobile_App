@@ -12,7 +12,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReactNativeBiometrics from 'react-native-biometrics';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface FaceIDProps {
@@ -20,6 +20,7 @@ interface FaceIDProps {
 }
 
 export const FaceID: React.FC<FaceIDProps> = ({ onClose }) => {
+  const { colors } = useTheme();
   const [isEnabled, setIsEnabled] = useState(false);
   const rnBiometrics = new ReactNativeBiometrics();
   const [isFaceIdAvailable, setIsFaceIdAvailable] = useState(false);
@@ -72,6 +73,8 @@ export const FaceID: React.FC<FaceIDProps> = ({ onClose }) => {
     loadState();
   }, []);
 
+  const styles = createStyles(colors); // generate theme-aware styles
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
@@ -110,64 +113,65 @@ export const FaceID: React.FC<FaceIDProps> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.secondaryText,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.primaryText,
-  },
-  placeholder: {
-    width: 40,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.primaryText,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.secondaryText,
-    marginBottom: 24,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.cardBackground,
-    padding: 16,
-    borderRadius: 12,
-    borderColor: colors.secondaryText,
-    borderWidth: 1,
-  },
-  toggleLabel: {
-    fontSize: 16,
-    color: colors.primaryText,
-    fontWeight: '500',
-  },
-});
-
+// 🎨 Theme-aware styles
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
+    },
+    backButton: {
+      padding: 8,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
+    },
+    placeholder: {
+      width: 40,
+    },
+    scrollContent: {
+      padding: 20,
+    },
+    iconContainer: {
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 8,
+    },
+    description: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginBottom: 24,
+    },
+    toggleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.cardBackground,
+      padding: 16,
+      borderRadius: 12,
+      borderColor: colors.secondaryText,
+      borderWidth: 1,
+    },
+    toggleLabel: {
+      fontSize: 16,
+      color: colors.primaryText,
+      fontWeight: '500',
+    },
+  });

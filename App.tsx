@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator, BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { colors } from './src/utils/colors';
+import { useTheme, ThemeProvider } from './src/context/ThemeContext';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
@@ -44,6 +44,7 @@ interface TabBarIconProps {
 }
 
 const TabBarIcon: React.FC<TabBarIconProps> = ({ name, focused }) => {
+  const { colors } = useTheme();
   const getIcon = () => {
     switch (name) {
       case 'Home':
@@ -97,6 +98,7 @@ export const HomeStackNavigator: React.FC = () => {
 
 // Main Tab Navigator
 export const MainTabNavigator: React.FC = () => {
+  const { colors } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={({ route }): BottomTabNavigationOptions => ({
@@ -133,9 +135,11 @@ export const MainTabNavigator: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <NavigationContainer>
-      <MainTabNavigator />
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer>
+        <MainTabNavigator />
+      </NavigationContainer>
+    </ThemeProvider>
   );
 };
 

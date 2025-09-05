@@ -9,7 +9,7 @@ import {
   Linking,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ContactSupportProps {
@@ -17,6 +17,8 @@ interface ContactSupportProps {
 }
 
 export const ContactSupport: React.FC<ContactSupportProps> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const handleEmailPress = () => {
     Linking.openURL('mailto:support@splitzy.in');
   };
@@ -55,7 +57,7 @@ export const ContactSupport: React.FC<ContactSupportProps> = ({ onClose }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

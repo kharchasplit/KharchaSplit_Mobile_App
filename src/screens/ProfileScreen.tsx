@@ -15,7 +15,7 @@ import { PaymentHistoryScreen } from './PaymentHistoryScreen';
 import { ReferralSystemScreen } from './ReferralSystemScreen';
 import { Settings } from './Settings';
 import { HelpandSupport } from './HelpandSupport';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationProps } from '../types/navigation';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -30,6 +30,7 @@ interface UserProfile {
 type ProfileScreenProps = Partial<NavigationProps>;
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
+  const { colors } = useTheme();
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
@@ -55,7 +56,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
     { id: 6, title: 'Logout', icon: 'logout', onPress: () => console.log('Logout pressed') },
   ];
 
-  const styles = createStyles();
+  const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -150,7 +151,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   );
 };
 
-const createStyles = () =>
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {

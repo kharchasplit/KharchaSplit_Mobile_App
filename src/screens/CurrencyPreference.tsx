@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type CurrencyPreferenceProps = {
@@ -22,6 +22,8 @@ type CurrencyOption = {
 };
 
 export const CurrencyPreference: React.FC<CurrencyPreferenceProps> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const currencyOptions: CurrencyOption[] = [
     { code: 'INR', logo: '₹' },
     { code: 'USD', logo: '$' },
@@ -78,7 +80,7 @@ export const CurrencyPreference: React.FC<CurrencyPreferenceProps> = ({ onClose 
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
