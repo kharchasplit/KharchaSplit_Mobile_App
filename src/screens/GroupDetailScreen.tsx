@@ -376,9 +376,10 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-          <TouchableOpacity style={styles.settingsButton} onPress={() => setShowGroupOptions(true)}>
+        <Text style={styles.headerTitle}>Group Details</Text>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => setShowGroupOptions(true)}>
           <Ionicons name="settings" size={20} color={colors.secondaryText} />
-          </TouchableOpacity>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -559,10 +560,18 @@ const createStyles = () =>
     container: {flex: 1, backgroundColor: colors.background},
     header: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingVertical: 12,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
     },
     backButton: {padding: 8},
     settingsButton: {padding: 8},

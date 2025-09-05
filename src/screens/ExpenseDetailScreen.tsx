@@ -248,11 +248,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: colors.cardBackground,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBackground,
+    borderBottomColor: colors.secondaryText,
   },
   backButton: {
     padding: 8,
-    borderRadius: 8,
   },
   headerTitle: {
     fontSize: 18,
@@ -260,7 +259,7 @@ const styles = StyleSheet.create({
     color: colors.primaryText,
   },
   headerRight: {
-    width: 24,
+    width: 40,
   },
   scrollView: {
     flex: 1,

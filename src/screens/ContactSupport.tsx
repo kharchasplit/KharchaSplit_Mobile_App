@@ -64,13 +64,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: colors.secondaryText,
   },
   backButton: {
-    padding: 4,
+    padding: 8,
   },
   headerTitle: {
     fontSize: 18,
@@ -78,7 +79,7 @@ const styles = StyleSheet.create({
     color: colors.primaryText,
   },
   placeholder: {
-    width: 32,
+    width: 40,
   },
   scrollView: {
     flex: 1,

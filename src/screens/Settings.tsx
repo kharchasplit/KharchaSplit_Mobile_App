@@ -12,9 +12,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { colors } from '../utils/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Notifications }from './Notification';
+import { Notifications } from './Notification';
 import { AccountPrivacy } from './AccountPrivacy';
-import { DevicePermission }from './DevicePermission';
+import { DevicePermission } from './DevicePermission';
 import { CurrencyPreference } from './CurrencyPreference';
 import { DeleteAccount } from './DeleteAccount';
 
@@ -130,21 +130,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBackground,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: colors.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.secondaryText,
   },
-  backButton: { padding: 4 },
+  backButton: { padding: 8 },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: colors.primaryText,
   },
-  placeholder: { width: 32 },
+  placeholder: { width: 40 },
   menuSection: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.background,
+    borderBottomColor: colors.secondaryText,
     margin: 16,
     borderRadius: 12,
     shadowColor: colors.primaryText,

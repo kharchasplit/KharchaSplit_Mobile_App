@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CreateNewGroupScreen } from './CreateNewGroupScreen';
 import { colors } from '../utils/colors';
+import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 interface GroupDetail {
@@ -184,7 +185,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Text style={{ fontSize: 18 }}>✖</Text>
+              <Text style={{ fontSize: typography.fontSize.lg }}>✖</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -273,15 +274,15 @@ const createStyles = () =>
     },
     header: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingVertical: 12,
       backgroundColor: colors.cardBackground,
       borderBottomWidth: 1,
-      borderBottomColor: colors.background,
+      borderBottomColor: colors.secondaryText,
     },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.primaryText },
+    headerTitle: { ...typography.text.headerLarge, color: colors.primaryText },
     headerActions: { flexDirection: 'row' },
     headerButton: { padding: 8, marginLeft: 12 },
     searchContainer: {
@@ -302,11 +303,11 @@ const createStyles = () =>
       padding: 12,
       borderRadius: 8,
     },
-    sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8, color: colors.primaryText },
+    sectionTitle: { ...typography.text.header, marginBottom: 8, color: colors.primaryText },
     balanceRow: { flexDirection: 'row', justifyContent: 'space-around' },
     balanceItem: { alignItems: 'center' },
-    balanceLabel: { color: colors.secondaryText },
-    balanceValue: { color: colors.primaryText, fontWeight: '600' },
+    balanceLabel: { ...typography.text.caption, color: colors.secondaryText },
+    balanceValue: { ...typography.text.subtitle, color: colors.primaryText },
     groupCard: {
       backgroundColor: colors.cardBackground,
       marginHorizontal: 16,
@@ -316,16 +317,16 @@ const createStyles = () =>
     },
     groupHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
     avatarContainer: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    avatar: { fontSize: 24 },
+    avatar: { fontSize: typography.fontSize['2xl'] },
     avatarImage: { width: 50, height: 50, borderRadius: 25 },
-    groupName: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
+    groupName: { ...typography.text.title, color: colors.primaryText },
     groupDetails: { paddingLeft: 8 },
     detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-    detailText: { color: colors.primaryText },
-    moreBalances: { color: colors.secondaryText },
+    detailText: { ...typography.text.body, color: colors.primaryText },
+    moreBalances: { ...typography.text.caption, color: colors.secondaryText },
     floatingButton: {
       position: 'absolute',
-      bottom: 80,
+      bottom: 5, // Changed from 80 to 24 to move it closer to bottom
       right: 24,
       width: 60,
       height: 60,

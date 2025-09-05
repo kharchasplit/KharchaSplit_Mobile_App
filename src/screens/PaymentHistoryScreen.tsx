@@ -274,6 +274,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: colors.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.secondaryText,
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },

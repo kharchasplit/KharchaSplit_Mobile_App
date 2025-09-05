@@ -299,6 +299,8 @@ const createStyles = () =>
       paddingHorizontal: 16,
       paddingVertical: 12,
       backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.secondaryText,
     },
     backButton: {
       padding: 8,

@@ -208,6 +208,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: colors.cardBackground,
     borderBottomWidth: 1,
     borderBottomColor: colors.secondaryText,
   },
