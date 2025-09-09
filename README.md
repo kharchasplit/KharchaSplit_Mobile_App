@@ -1,16 +1,15 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# KharchaSplit
 
-# Getting Started
+**KharchaSplit** is a free, open-source mobile application built with React Native CLI and Firebase. It simplifies splitting expenses among family and friends, making shared financial management easy, intuitive, and efficient.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+---
 
-## Step 1: Start Metro
+## 🚀 Getting Started
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+### Step 1: Start Metro
+First, run the Metro bundler from the root of your project:
 
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
+```bash
 # Using npm
 npm start
 
@@ -18,13 +17,10 @@ npm start
 yarn start
 ```
 
-## Step 2: Build and run your app
+### Step 2: Build and Run the App
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
+#### Android
+```bash
 # Using npm
 npm run android
 
@@ -32,25 +28,16 @@ npm run android
 yarn android
 ```
 
-### iOS
+#### iOS
+Before running on iOS, install CocoaPods (only required on first setup or when dependencies change):
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
+```bash
 bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
 bundle exec pod install
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
+Then run:
+```bash
 # Using npm
 npm run ios
 
@@ -58,40 +45,67 @@ npm run ios
 yarn ios
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+---
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+## ✨ Features
 
-## Step 3: Modify your app
+- **User Onboarding & Authentication** – Secure signup/login flow.  
+- **Group & Expense Management** – Create groups, add expenses, and split efficiently.  
+- **Flexible Splitting Options** – Equal, unequal, percentage-based, and share-based.  
+- **Balance Tracking** – Track who owes whom, with clear payment history.  
+- **Cross-Platform** – Built with React Native CLI for Android and iOS.  
+- **Dark Mode & Modern UI** – Sleek, animated, and comfortable interface.  
+- **Free & Open Source** – No subscription fees, fully customizable.  
 
-Now that you have successfully run the app, let's make changes!
+---
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+## 🔮 Future Scope
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+- **Push Notifications** – Reminders and real-time updates.  
+- **In-App Payments** – Settle balances directly within the app.  
+- **Receipt Scanning (OCR)** – Automatically extract expense details.  
+- **Advanced Reporting** – Export data to CSV/PDF and view group insights.  
+- **Integrated Expense Manager** – A more complete personal finance tool.  
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+---
 
-## Congratulations! :tada:
+## 🛠️ Tech Stack
 
-You've successfully run and modified your React Native App. :partying_face:
+- **Frontend:** React Native CLI  
+- **Backend:** Firebase (Authentication, Firestore, Storage)  
+- **Libraries & Tools:** React Navigation, NativeWind, React Native Gesture Handler, Vector Icons  
+- **Development Tools:** Node.js, npm, Watchman, Xcode, CocoaPods, JDK, Android Studio  
 
-### Now what?
+---
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+## 🤝 Contributing
 
-# Troubleshooting
+KharchaSplit is **open source** and welcomes contributions!  
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+- Fork the repo  
+- Create your feature branch (`git checkout -b feature/new-feature`)  
+- Commit your changes (`git commit -m "Add new feature"`)  
+- Push to the branch (`git push origin feature/new-feature`)  
+- Open a Pull Request  
 
-# Learn More
+---
 
-To learn more about React Native, take a look at the following resources:
+## 👥 Contributors
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+We’d like to thank the following contributors for their valuable efforts in building **KharchaSplit**:  
+
+- **Shubham Hinge** – Project Lead & Developer  
+- **Shoaib Ansari & Atharv Prasad** – Frontend Developer  
+- **Shoaib Ansari** – Backend Developer  
+- **Atharv Prasad** – UI/UX Designer  
+- **Atharv Prasad** – Tester/QA  
+
+_(Add or update names as the team grows!)_  
+
+---
+
+## 📬 Invitation to Collaborators
+
+We’re building KharchaSplit to make shared financial management **simple, free, and accessible to everyone**. If you’d like to contribute, share feedback, or collaborate, join us on this journey! 🚀  
+
+Together, we can build the most user-friendly and powerful open-source expense management app. 💡  
