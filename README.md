@@ -4,6 +4,14 @@
 
 ---
 
+
+## 📬 Invitation to Collaborators
+
+We’re building KharchaSplit to make shared financial management **simple, free, and accessible to everyone**. If you’d like to contribute, share feedback, or collaborate, join us on this journey! 🚀  
+
+Together, we can build the most user-friendly and powerful open-source expense management app. 💡  
+
+
 ## 🚀 Getting Started
 
 ### Step 1: Start Metro
@@ -94,18 +102,10 @@ KharchaSplit is **open source** and welcomes contributions!
 
 We’d like to thank the following contributors for their valuable efforts in building **KharchaSplit**:  
 
+- **Vijay Prasad** – Project Manager
 - **Shubham Hinge** – Project Lead & Developer  
-- **Shoaib Ansari & Atharv Prasad** – Frontend Developer  
-- **Shoaib Ansari** – Backend Developer  
-- **Atharv Prasad** – UI/UX Designer  
-- **Atharv Prasad** – Tester/QA  
-
-_(Add or update names as the team grows!)_  
+- **Shoaib Ansari** – Frontend Developer , Backend Developer 
+- **Siddarth Shinde** – UI/UX Designer  
+- **Atharv Prasad** – Frontend Developer , Tester/QA 
 
 ---
-
-## 📬 Invitation to Collaborators
-
-We’re building KharchaSplit to make shared financial management **simple, free, and accessible to everyone**. If you’d like to contribute, share feedback, or collaborate, join us on this journey! 🚀  
-
-Together, we can build the most user-friendly and powerful open-source expense management app. 💡  
