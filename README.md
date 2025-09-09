@@ -94,11 +94,11 @@ KharchaSplit is **open source** and welcomes contributions!
 
 We’d like to thank the following contributors for their valuable efforts in building **KharchaSplit**:  
 
-- **[Your Name Here]** – Project Lead & Developer  
-- **[Contributor 2]** – Frontend Developer  
-- **[Contributor 3]** – Backend Developer  
-- **[Contributor 4]** – UI/UX Designer  
-- **[Contributor 5]** – Tester/QA  
+- **Shubham Hinge** – Project Lead & Developer  
+- **Shoaib Ansari & Atharv Prasad** – Frontend Developer  
+- **Shoaib Ansari** – Backend Developer  
+- **Atharv Prasad** – UI/UX Designer  
+- **Atharv Prasad** – Tester/QA  
 
 _(Add or update names as the team grows!)_  
 
