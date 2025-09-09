@@ -11,6 +11,7 @@ We’re building KharchaSplit to make shared financial management **simple, free
 
 Together, we can build the most user-friendly and powerful open-source expense management app. 💡  
 
+---
 
 ## 🚀 Getting Started
 
