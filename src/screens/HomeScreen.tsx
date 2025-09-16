@@ -10,13 +10,19 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  // --- RESPONSIVE ---
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CreateNewGroupScreen } from './CreateNewGroupScreen';
 import { useTheme } from '../context/ThemeContext';
+// --- RESPONSIVE ---
+// We now use this object to create scaled sizes
 import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+// (Interfaces remain the same)
+// ... (GroupDetail, Group, OverallBalance, HomeScreenProps)
 interface GroupDetail {
   text: string;
   amount: number;
@@ -49,8 +55,31 @@ interface HomeScreenProps {
   navigation: any;
 }
 
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { colors } = useTheme();
+
+  // --- RESPONSIVE ---
+  // Get screen width
+  const { width: screenWidth } = useWindowDimensions();
+  
+  // Define base width and scaling function
+  const baseWidth = 375;
+  const scale = (size: number) => (screenWidth / baseWidth) * size;
+
+  // Create an object of scaled font sizes using the imported typography file
+  const scaledFontSize = {
+    lg: scale(typography.fontSize.lg),
+    '2xl': scale(typography.fontSize['2xl']),
+    headerLarge: scale(typography.text.headerLarge.fontSize),
+    header: scale(typography.text.header.fontSize),
+    title: scale(typography.text.title.fontSize),
+    subtitle: scale(typography.text.subtitle.fontSize),
+    body: scale(typography.text.body.fontSize),
+    caption: scale(typography.text.caption.fontSize),
+  };
+  // --- END RESPONSIVE ---
+
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,7 +93,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   });
   const [balanceLoading, setBalanceLoading] = useState(false);
 
-  const loadGroupsAndBalance = () => {
+  // (All logic functions: loadGroupsAndBalance, handleAddGroup, etc. remain the same)
+  // ... (loadGroupsAndBalance, handleAddGroup, handleCloseCreateGroup, handleSaveNewGroup, handleSearch, filteredGroups, onRefresh)
+    const loadGroupsAndBalance = () => {
     setBalanceLoading(true);
     setTimeout(() => {
       const mockGroups: Group[] = [
@@ -152,7 +183,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const styles = createStyles(colors);
+  // --- RESPONSIVE ---
+  // createStyles is now called with the scale function and fonts object
+  const styles = createStyles(colors, scale, scaledFontSize);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -163,12 +196,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <TouchableOpacity style={styles.headerButton} onPress={handleSearch}>
             <MaterialIcons
               name={showSearchBar ? 'close' : 'search'}
-              size={24}
+              // --- RESPONSIVE --- Correctly uses scaled size
+              size={scaledFontSize.lg}
               color={colors.primaryText}
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={handleAddGroup}>
-            <MaterialIcons name="add" size={24} color={colors.primaryText} />
+            <MaterialIcons
+              name="add"
+              // --- RESPONSIVE --- Correctly uses scaled size
+              size={scaledFontSize.lg}
+              color={colors.primaryText}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -186,7 +225,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Text style={{ fontSize: typography.fontSize.lg }}>✖</Text>
+              {/* --- RESPONSIVE --- Correctly uses scaled size */}
+              <Text style={{ fontSize: scaledFontSize.lg }}>✖</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -194,7 +234,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        // --- RESPONSIVE --- Correctly uses scaled size
+        contentContainerStyle={{ paddingBottom: scale(120) }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Overall Balance */}
@@ -256,7 +297,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* Floating Button */}
       <TouchableOpacity style={styles.floatingButton} onPress={handleAddGroup}>
-        <MaterialIcons name="add" size={28} color={colors.primaryButtonText} />
+        <MaterialIcons
+          name="add"
+          // --- RESPONSIVE --- Correctly uses scaled size
+          size={scaledFontSize.headerLarge}
+          color={colors.primaryButtonText}
+        />
       </TouchableOpacity>
 
       {/* Create New Group Modal */}
@@ -267,7 +313,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+// --- RESPONSIVE ---
+// Moved createStyles *outside* the component again, as it no longer
+// needs to be re-created on every render.
+// It now accepts scale and fonts as arguments.
+const createStyles = (
+  colors: ReturnType<typeof useTheme>['colors'],
+  scale: (size: number) => number,
+  fonts: { [key: string]: number } // The scaledFontSize object
+) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -277,63 +331,123 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingHorizontal: scale(16),
+      paddingVertical: scale(12),
       backgroundColor: colors.cardBackground,
       borderBottomWidth: 1,
       borderBottomColor: colors.secondaryText,
     },
-    headerTitle: { ...typography.text.headerLarge, color: colors.primaryText },
+    headerTitle: {
+      ...typography.text.headerLarge,
+      color: colors.primaryText,
+      fontSize: fonts.headerLarge, // Use passed-in font
+    },
     headerActions: { flexDirection: 'row' },
-    headerButton: { padding: 8, marginLeft: 12 },
+    headerButton: { padding: scale(8), marginLeft: scale(12) },
     searchContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.inputBackground,
-      paddingHorizontal: 12,
-      margin: 12,
-      borderRadius: 12,
+      paddingHorizontal: scale(12),
+      margin: scale(12),
+      borderRadius: scale(12),
     },
-    searchInput: { flex: 1, height: 40, color: colors.inputText },
+    searchInput: {
+      flex: 1,
+      height: scale(40),
+      color: colors.inputText,
+      fontSize: fonts.body, // Use passed-in font
+    },
     scrollView: {
       flex: 1,
     },
     balanceSection: {
       backgroundColor: colors.cardBackground,
-      margin: 16,
-      padding: 12,
-      borderRadius: 8,
+      margin: scale(16),
+      padding: scale(12),
+      borderRadius: scale(8),
     },
-    sectionTitle: { ...typography.text.header, marginBottom: 8, color: colors.primaryText },
+    sectionTitle: {
+      ...typography.text.header,
+      marginBottom: scale(8),
+      color: colors.primaryText,
+      fontSize: fonts.header, // Use passed-in font
+    },
     balanceRow: { flexDirection: 'row', justifyContent: 'space-around' },
     balanceItem: { alignItems: 'center' },
-    balanceLabel: { ...typography.text.caption, color: colors.secondaryText },
-    balanceValue: { ...typography.text.subtitle, color: colors.primaryText },
+    balanceLabel: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption, // Use passed-in font
+    },
+    balanceValue: {
+      ...typography.text.subtitle,
+      color: colors.primaryText,
+      fontSize: fonts.subtitle, // Use passed-in font
+    },
     groupCard: {
       backgroundColor: colors.cardBackground,
-      marginHorizontal: 16,
-      marginVertical: 8,
-      padding: 12,
-      borderRadius: 8,
+      marginHorizontal: scale(16),
+      marginVertical: scale(8),
+      padding: scale(12),
+      borderRadius: scale(8),
     },
-    groupHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    avatarContainer: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    avatar: { fontSize: typography.fontSize['2xl'] },
-    avatarImage: { width: 50, height: 50, borderRadius: 25 },
-    groupName: { ...typography.text.title, color: colors.primaryText },
-    groupDetails: { paddingLeft: 8 },
-    detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-    detailText: { ...typography.text.body, color: colors.primaryText },
-    moreBalances: { ...typography.text.caption, color: colors.secondaryText },
+    groupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: scale(8),
+    },
+    avatarContainer: {
+      width: scale(50),
+      height: scale(50),
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: scale(12),
+    },
+    avatar: {
+      fontSize: fonts['2xl'], // Use passed-in font
+    },
+    avatarImage: {
+      width: scale(50),
+      height: scale(50),
+      borderRadius: scale(25),
+    },
+    groupName: {
+      ...typography.text.title,
+      color: colors.primaryText,
+      fontSize: fonts.title, // Use passed-in font
+    },
+    groupDetails: {
+      paddingLeft: scale(8),
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: scale(2),
+    },
+    detailText: {
+      ...typography.text.body,
+      color: colors.primaryText,
+      fontSize: fonts.body, // Use passed-in font
+    },
+    moreBalances: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption, // Use passed-in font
+    },
     floatingButton: {
       position: 'absolute',
-      bottom: 5, // Changed from 80 to 24 to move it closer to bottom
-      right: 24,
-      width: 60,
-      height: 60,
-      borderRadius: 30,
+      bottom: scale(24),
+      right: scale(24),
+      width: scale(60),
+      height: scale(60),
+      borderRadius: scale(30),
       backgroundColor: colors.primaryButton,
       justifyContent: 'center',
       alignItems: 'center',
+      shadowOffset: { width: 0, height: scale(2) },
+      shadowOpacity: 0.25,
+      shadowRadius: scale(4),
+      elevation: 5,
     },
   });

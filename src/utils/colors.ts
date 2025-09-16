@@ -1,45 +1,45 @@
-// 🌙 Dark Mode
+// 🌙 Dark Mode (Slate & Mint)
 const darkColors = {
-  background: '#121212',
-  cardBackground: '#1e1e2f',
-  primaryText: '#ffffff',
-  secondaryText: '#a0a0b8',
-  primaryButton: '#ff8c42',
-  primaryButtonText: '#1e1e2f',
-  secondaryButton: '#6c63ff',
-  inputBackground: '#2a2a3d',
-  inputText: '#ffffff',
-  inputPlaceholder: '#7a7a99',
-  activeIcon: '#ff8c42',
-  inactiveIcon: '#7a7a99',
-  success: '#4caf50',
-  error: '#f44336',
-  warning: '#ff9800',
-  primaryGradient: ['#ff8c42', '#ff5e62'],
-  backgroundGradient: ['#1e1e2f', '#121212'],
+  background: '#0D1117',         // Deep slate blue, darker than before
+  cardBackground: '#161B22',    // Slightly lighter slate for cards/headers
+  primaryText: '#E6EDF3',       // Soft white, not pure glaring white
+  secondaryText: '#7D8590',     // Muted gray for secondary info
+  primaryButton: '#23C5A0',     // Vibrant mint green
+  primaryButtonText: '#0D1117', // Dark text for high contrast on mint button
+  secondaryButton: '#21262D',   // Dark gray, subtle
+  inputBackground: '#21262D',   // Dark input background
+  inputText: '#E6EDF3',         // Soft white
+  inputPlaceholder: '#484F58',  // Muted placeholder text
+  activeIcon: '#23C5A0',         // Mint green for active states
+  inactiveIcon: '#7D8590',     // Muted gray for inactive states
+  success: '#28A745',           // A clear, vibrant green
+  error: '#DA3633',             // A clear, vibrant red
+  warning: '#E3B341',           // A clear yellow/gold
+  primaryGradient: ['#23C5A0', '#30D1B2'], // Mint gradient
+  backgroundGradient: ['#161B22', '#0D1117'], // Subtle background gradient
 } as const;
 
-// ☀️ Light Mode
+// ☀️ Light Mode (Clean & Mint)
 const lightColors = {
-  background: '#f9f9fb',
-  cardBackground: '#ffffff',
-  primaryText: '#1e1e2f',
-  secondaryText: '#5a5a89',
-  primaryButton: '#0077ff',
-  primaryButtonText: '#ffffff',
-  secondaryButton: '#00c9a7',
-  inputBackground: '#e6e6f0',
-  inputText: '#1e1e2f',
-  inputPlaceholder: '#7a7a99',
-  activeIcon: '#0077ff',
-  inactiveIcon: '#7a7a99',
-  success: '#28a745',
-  error: '#dc3545',
-  warning: '#ffc107',
-  primaryGradient: ['#0077ff', '#00c9a7'],
-  backgroundGradient: ['#f9f9fb', '#e6e6f0'],
+  background: '#F6F8FA',         // Very light, clean gray
+  cardBackground: '#FFFFFF',    // Crisp white cards
+  primaryText: '#1F2328',       // Dark slate text (not pure black)
+  secondaryText: '#57606A',     // Readable medium gray
+  primaryButton: '#23866E',     // A slightly darker, richer mint for contrast on white
+  primaryButtonText: '#FFFFFF', // White text
+  secondaryButton: '#F6F8FA',   // Light gray button
+  inputBackground: '#F6F8FA',   // Light gray inputs
+  inputText: '#1F2328',         // Dark text
+  inputPlaceholder: '#6E7781',  // Muted placeholder
+  activeIcon: '#23866E',         // Primary mint color
+  inactiveIcon: '#57606A',     // Medium gray
+  success: '#1A7F37',           // A rich, accessible green
+  error: '#CF222E',             // A strong, accessible red
+  warning: '#BF8600',           // A clear, accessible yellow/brown
+  primaryGradient: ['#23C5A0', '#23866E'],
+  backgroundGradient: ['#FFFFFF', '#F6F8FA'],
 } as const;
 
-// 🛠️ Theme helper
+// 🛠️ Theme helper (Your existing helper is perfect)
 export const getColors = (mode: 'light' | 'dark') => (mode === 'dark' ? darkColors : lightColors);
 export type ColorKey = keyof typeof darkColors;
