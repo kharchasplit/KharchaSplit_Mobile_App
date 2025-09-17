@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  StatusBar
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -108,10 +109,11 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
 
   return (
     <SafeAreaView style={styles.container}>
+       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Recent Activity</Text>
-      </View>
+      </View> 
 
       <ScrollView
         style={styles.scrollView}
@@ -183,7 +185,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     borderBottomWidth: 0,
     borderBottomColor: colors.secondaryText,
   },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.primaryText },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: colors.primaryText },
     scrollView: { flex: 1 },
     content: { padding: 16 },
     activityCard: {

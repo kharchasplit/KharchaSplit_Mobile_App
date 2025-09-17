@@ -10,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  StatusBar,
   // --- RESPONSIVE ---
   useWindowDimensions,
 } from 'react-native';
@@ -22,7 +23,6 @@ import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 // (Interfaces remain the same)
-// ... (GroupDetail, Group, OverallBalance, HomeScreenProps)
 interface GroupDetail {
   text: string;
   amount: number;
@@ -57,7 +57,13 @@ interface HomeScreenProps {
 
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const { colors } = useTheme();
+  // --- STATUS BAR FIX ---
+  // Assuming your theme context provides an isDarkMode boolean
+  // If it provides a string like `mode`, you can do:
+  // const { colors, mode } = useTheme();
+  // const isDarkMode = mode === 'dark';
+  const { colors, isDarkMode } = useTheme();
+  // --- END FIX ---
 
   // --- RESPONSIVE ---
   // Get screen width
@@ -94,7 +100,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [balanceLoading, setBalanceLoading] = useState(false);
 
   // (All logic functions: loadGroupsAndBalance, handleAddGroup, etc. remain the same)
-  // ... (loadGroupsAndBalance, handleAddGroup, handleCloseCreateGroup, handleSaveNewGroup, handleSearch, filteredGroups, onRefresh)
     const loadGroupsAndBalance = () => {
     setBalanceLoading(true);
     setTimeout(() => {
@@ -187,8 +192,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // createStyles is now called with the scale function and fonts object
   const styles = createStyles(colors, scale, scaledFontSize);
 
+  // --- STATUS BAR FIX ---
+  // Set the status bar content color based on the active theme
+  // 'dark-content' (black text) for light mode
+  // 'light-content' (white text) for dark mode
+  const statusBarTheme = isDarkMode ? 'light-content' : 'dark-content';
+  // --- END FIX ---
+
   return (
     <SafeAreaView style={styles.container}>
+       {/* --- STATUS BAR FIX --- */}
+       {/* Use the new dynamic statusBarTheme variable */}
+       <StatusBar barStyle={statusBarTheme} backgroundColor={colors.background} />
+       {/* --- END FIX --- */}
+       
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Groups</Text>
@@ -314,9 +331,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 };
 
 // --- RESPONSIVE ---
-// Moved createStyles *outside* the component again, as it no longer
-// needs to be re-created on every render.
-// It now accepts scale and fonts as arguments.
+// (createStyles function remains unchanged)
 const createStyles = (
   colors: ReturnType<typeof useTheme>['colors'],
   scale: (size: number) => number,
