@@ -23,9 +23,32 @@ service cloud.firestore {
       allow read, write: if true;
     }
     
-    // Groups collection (for future use)
+    // Groups collection rules
     match /groups/{groupId} {
-      allow read, write: if request.auth != null;
+      // Allow reading groups where user is a member
+      allow read: if request.auth != null && 
+        (request.auth.uid in resource.data.members[].userId ||
+         resource.data.createdBy == request.auth.uid);
+      
+      // Allow creating groups
+      allow create: if request.auth != null &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.keys().hasAll(['name', 'members', 'createdBy', 'createdAt', 'updatedAt', 'isActive', 'totalExpenses', 'currency']);
+      
+      // Allow updating groups for members and creators
+      allow update: if request.auth != null && 
+        (request.auth.uid in resource.data.members[].userId ||
+         resource.data.createdBy == request.auth.uid);
+      
+      // Allow deleting groups for creators only
+      allow delete: if request.auth != null && 
+        resource.data.createdBy == request.auth.uid;
+    }
+    
+    // For development/testing - allow read/write to groups collection
+    // REMOVE THIS IN PRODUCTION
+    match /groups/{document=**} {
+      allow read, write: if true;
     }
     
     // Expenses collection (for future use)

@@ -66,9 +66,41 @@ export interface ReferralData {
   updatedAt: string;
 }
 
+export interface GroupMember {
+  userId: string;
+  name: string;
+  phoneNumber: string;
+  joinedAt: string;
+  role: 'admin' | 'member';
+  profileImage?: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  coverImageBase64?: string; // Base64 encoded cover image
+  members: GroupMember[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  totalExpenses: number;
+  currency: string;
+}
+
+export interface CreateGroup {
+  name: string;
+  description?: string;
+  coverImageBase64?: string; // Base64 encoded cover image
+  memberPhoneNumbers: string[]; // Phone numbers of members to add
+  currency?: string;
+}
+
 class FirebaseService {
   private _usersCollection = firestore().collection('users');
   private _referralsCollection = firestore().collection('referrals');
+  private _groupsCollection = firestore().collection('groups');
 
   // Expose usersCollection for direct queries when needed
   get usersCollection() {
@@ -77,6 +109,10 @@ class FirebaseService {
 
   get referralsCollection() {
     return this._referralsCollection;
+  }
+
+  get groupsCollection() {
+    return this._groupsCollection;
   }
 
   async createUser(userData: CreateUserProfile): Promise<UserProfile> {
@@ -205,6 +241,117 @@ class FirebaseService {
     } catch (error) {
       console.error('Error checking user existence:', error);
       return false;
+    }
+  }
+
+  /**
+   * Check which phone numbers exist in the database
+   * Returns array of existing phone numbers
+   */
+  async getExistingPhoneNumbers(phoneNumbers: string[]): Promise<string[]> {
+    try {
+      console.log('Checking existence for phone numbers:', phoneNumbers.length);
+      
+      if (phoneNumbers.length === 0) {
+        return [];
+      }
+
+      // Firebase 'in' query can handle up to 10 items at a time
+      const existingNumbers: string[] = [];
+      const batchSize = 10;
+      
+      for (let i = 0; i < phoneNumbers.length; i += batchSize) {
+        const batch = phoneNumbers.slice(i, i + batchSize);
+        
+        try {
+          const querySnapshot = await this._usersCollection
+            .where('phoneNumber', 'in', batch)
+            .where('isActive', '==', true)
+            .get();
+
+          querySnapshot.docs.forEach(doc => {
+            const userData = doc.data();
+            if (userData.phoneNumber) {
+              existingNumbers.push(userData.phoneNumber);
+            }
+          });
+        } catch (batchError) {
+          console.warn('Error in batch query, trying individual checks for batch:', batch);
+          // Fallback: check each number individually
+          for (const phoneNumber of batch) {
+            try {
+              const exists = await this.checkUserExists(phoneNumber);
+              if (exists) {
+                existingNumbers.push(phoneNumber);
+              }
+            } catch (individualError) {
+              console.warn(`Error checking individual phone number ${phoneNumber}:`, individualError);
+            }
+          }
+        }
+      }
+
+      console.log(`Found ${existingNumbers.length} existing users out of ${phoneNumbers.length} phone numbers`);
+      return existingNumbers;
+    } catch (error) {
+      console.error('Error checking phone numbers existence:', error);
+      // Return empty array instead of throwing to allow graceful fallback
+      return [];
+    }
+  }
+
+  /**
+   * Get user profiles for existing phone numbers
+   * Returns array of user profiles
+   */
+  async getUsersByPhoneNumbers(phoneNumbers: string[]): Promise<UserProfile[]> {
+    try {
+      console.log('Getting user profiles for phone numbers:', phoneNumbers.length);
+      
+      if (phoneNumbers.length === 0) {
+        return [];
+      }
+
+      const users: UserProfile[] = [];
+      const batchSize = 10;
+      
+      for (let i = 0; i < phoneNumbers.length; i += batchSize) {
+        const batch = phoneNumbers.slice(i, i + batchSize);
+        
+        try {
+          const querySnapshot = await this._usersCollection
+            .where('phoneNumber', 'in', batch)
+            .where('isActive', '==', true)
+            .get();
+
+          querySnapshot.docs.forEach(doc => {
+            const userData = doc.data();
+            users.push({
+              id: doc.id,
+              ...userData,
+            } as UserProfile);
+          });
+        } catch (batchError) {
+          console.warn('Error in batch query, trying individual lookups for batch:', batch);
+          // Fallback: check each number individually
+          for (const phoneNumber of batch) {
+            try {
+              const user = await this.getUserByPhone(phoneNumber);
+              if (user) {
+                users.push(user);
+              }
+            } catch (individualError) {
+              console.warn(`Error getting user for phone number ${phoneNumber}:`, individualError);
+            }
+          }
+        }
+      }
+
+      console.log(`Found ${users.length} user profiles`);
+      return users;
+    } catch (error) {
+      console.error('Error getting users by phone numbers:', error);
+      return [];
     }
   }
 
@@ -401,6 +548,302 @@ class FirebaseService {
     } catch (error) {
       console.error('Error validating referral code:', error);
       return false;
+    }
+  }
+
+  // Group Management Methods
+
+  /**
+   * Create a new group with members
+   */
+  async createGroup(groupData: CreateGroup, createdBy: string): Promise<Group> {
+    try {
+      console.log('Creating group:', groupData.name, 'by user:', createdBy);
+      const timestamp = new Date().toISOString();
+
+      // Get creator user data
+      const creator = await this.getUserById(createdBy);
+      if (!creator) {
+        throw new Error('Creator user not found');
+      }
+
+      // Resolve members by phone numbers
+      const members: GroupMember[] = [];
+      
+      // Add creator as admin
+      members.push({
+        userId: createdBy,
+        name: creator.name,
+        phoneNumber: creator.phoneNumber,
+        joinedAt: timestamp,
+        role: 'admin',
+        profileImage: creator.profileImageBase64 || creator.profileImage,
+      });
+
+      // Add other members
+      for (const phoneNumber of groupData.memberPhoneNumbers) {
+        // Skip if it's the creator's phone number
+        if (phoneNumber === creator.phoneNumber) continue;
+
+        const user = await this.getUserByPhone(phoneNumber);
+        if (user) {
+          members.push({
+            userId: user.id,
+            name: user.name,
+            phoneNumber: user.phoneNumber,
+            joinedAt: timestamp,
+            role: 'member',
+            profileImage: user.profileImageBase64 || user.profileImage,
+          });
+        } else {
+          console.warn(`User with phone ${phoneNumber} not found, skipping`);
+        }
+      }
+
+      // Create group document
+      const groupDoc: Omit<Group, 'id'> = {
+        name: groupData.name,
+        description: groupData.description,
+        coverImageBase64: groupData.coverImageBase64,
+        members,
+        createdBy,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        isActive: true,
+        totalExpenses: 0,
+        currency: groupData.currency || 'INR',
+      };
+
+      const docRef = await this._groupsCollection.add(groupDoc);
+      
+      const group: Group = {
+        id: docRef.id,
+        ...groupDoc,
+      };
+
+      console.log('Group created successfully:', group.id);
+      return group;
+    } catch (error: any) {
+      console.error('Error creating group:', error);
+      if (error.code === 'firestore/permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
+      throw new Error('Failed to create group');
+    }
+  }
+
+  /**
+   * Get groups where user is a member
+   */
+  async getUserGroups(userId: string): Promise<Group[]> {
+    try {
+      console.log('Getting groups for user:', userId);
+      
+      // Try the simple query first
+      let snapshot;
+      try {
+        snapshot = await this._groupsCollection
+          .where('isActive', '==', true)
+          .get();
+      } catch (indexError: any) {
+        console.log('Retrying with simpler query...');
+        // If even this fails, try without any where clause
+        snapshot = await this._groupsCollection.get();
+      }
+
+      const groups: Group[] = [];
+      snapshot.docs.forEach(doc => {
+        const groupData = doc.data();
+        // Check if group is active and user is a member
+        const isActive = groupData.isActive !== false; // Default to true if undefined
+        const isMember = groupData.members && groupData.members.some((member: GroupMember) => member.userId === userId);
+        
+        if (isActive && isMember) {
+          groups.push({
+            id: doc.id,
+            ...groupData,
+          } as Group);
+        }
+      });
+
+      // Sort by updatedAt on client side
+      groups.sort((a, b) => {
+        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+
+      console.log(`Found ${groups.length} groups for user:`, userId);
+      return groups;
+    } catch (error: any) {
+      console.error('Error getting user groups:', error);
+      
+      // Provide more specific error information
+      if (error.code === 'firestore/permission-denied') {
+        throw new Error('Permission denied: Please check Firebase security rules');
+      } else if (error.code === 'firestore/failed-precondition') {
+        throw new Error('Database index required. Please contact support.');
+      }
+      
+      throw new Error('Failed to get user groups');
+    }
+  }
+
+  /**
+   * Get group by ID
+   */
+  async getGroupById(groupId: string): Promise<Group | null> {
+    try {
+      const groupDoc = await this._groupsCollection.doc(groupId).get();
+      
+      if (!groupDoc.exists) {
+        return null;
+      }
+
+      const groupData = groupDoc.data();
+      if (!groupData || !groupData.isActive) {
+        return null;
+      }
+
+      return {
+        id: groupDoc.id,
+        ...groupData,
+      } as Group;
+    } catch (error) {
+      console.error('Error fetching group by ID:', error);
+      throw new Error('Failed to fetch group data');
+    }
+  }
+
+  /**
+   * Update group details
+   */
+  async updateGroup(groupId: string, updateData: Partial<CreateGroup>): Promise<Group> {
+    try {
+      const updateTimestamp = new Date().toISOString();
+      await this._groupsCollection.doc(groupId).update({
+        ...updateData,
+        updatedAt: updateTimestamp,
+      });
+
+      console.log('Group updated successfully:', groupId);
+
+      // Return updated group
+      const updatedGroup = await this.getGroupById(groupId);
+      if (!updatedGroup) {
+        throw new Error('Failed to fetch updated group');
+      }
+
+      return updatedGroup;
+    } catch (error) {
+      console.error('Error updating group:', error);
+      throw new Error('Failed to update group');
+    }
+  }
+
+  /**
+   * Add member to group
+   */
+  async addGroupMember(groupId: string, phoneNumber: string): Promise<Group> {
+    try {
+      const group = await this.getGroupById(groupId);
+      if (!group) {
+        throw new Error('Group not found');
+      }
+
+      const user = await this.getUserByPhone(phoneNumber);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Check if user is already a member
+      const existingMember = group.members.find(member => member.userId === user.id);
+      if (existingMember) {
+        throw new Error('User is already a member of this group');
+      }
+
+      const newMember: GroupMember = {
+        userId: user.id,
+        name: user.name,
+        phoneNumber: user.phoneNumber,
+        joinedAt: new Date().toISOString(),
+        role: 'member',
+        profileImage: user.profileImageBase64 || user.profileImage,
+      };
+
+      const updatedMembers = [...group.members, newMember];
+      
+      await this._groupsCollection.doc(groupId).update({
+        members: updatedMembers,
+        updatedAt: new Date().toISOString(),
+      });
+
+      console.log('Member added to group successfully');
+      
+      // Return updated group
+      const updatedGroup = await this.getGroupById(groupId);
+      if (!updatedGroup) {
+        throw new Error('Failed to fetch updated group');
+      }
+
+      return updatedGroup;
+    } catch (error) {
+      console.error('Error adding group member:', error);
+      throw new Error('Failed to add member to group');
+    }
+  }
+
+  /**
+   * Remove member from group
+   */
+  async removeGroupMember(groupId: string, userId: string): Promise<Group> {
+    try {
+      const group = await this.getGroupById(groupId);
+      if (!group) {
+        throw new Error('Group not found');
+      }
+
+      // Cannot remove creator
+      if (group.createdBy === userId) {
+        throw new Error('Cannot remove group creator');
+      }
+
+      const updatedMembers = group.members.filter(member => member.userId !== userId);
+      
+      await this._groupsCollection.doc(groupId).update({
+        members: updatedMembers,
+        updatedAt: new Date().toISOString(),
+      });
+
+      console.log('Member removed from group successfully');
+      
+      // Return updated group
+      const updatedGroup = await this.getGroupById(groupId);
+      if (!updatedGroup) {
+        throw new Error('Failed to fetch updated group');
+      }
+
+      return updatedGroup;
+    } catch (error) {
+      console.error('Error removing group member:', error);
+      throw new Error('Failed to remove member from group');
+    }
+  }
+
+  /**
+   * Delete/deactivate group
+   */
+  async deleteGroup(groupId: string): Promise<void> {
+    try {
+      await this._groupsCollection.doc(groupId).update({
+        isActive: false,
+        updatedAt: new Date().toISOString(),
+      });
+      
+      console.log('Group deactivated successfully:', groupId);
+    } catch (error) {
+      console.error('Error deactivating group:', error);
+      throw new Error('Failed to deactivate group');
     }
   }
 }

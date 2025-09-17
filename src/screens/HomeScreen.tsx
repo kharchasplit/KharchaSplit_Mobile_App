@@ -17,6 +17,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CreateNewGroupScreen } from './CreateNewGroupScreen';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { firebaseService, Group as FirebaseGroup } from '../services/firebaseService';
 // --- RESPONSIVE ---
 // We now use this object to create scaled sizes
 import { typography } from '../utils/typography';
@@ -63,6 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // const { colors, mode } = useTheme();
   // const isDarkMode = mode === 'dark';
   const { colors, isDarkMode } = useTheme();
+  const { user } = useAuth();
   // --- END FIX ---
 
   // --- RESPONSIVE ---
@@ -90,6 +93,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
+  const [firebaseGroups, setFirebaseGroups] = useState<FirebaseGroup[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [overallBalance, setOverallBalance] = useState<OverallBalance>({
     netBalance: 0,
@@ -98,50 +102,75 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     groupBalanceDetails: [],
   });
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
-  // (All logic functions: loadGroupsAndBalance, handleAddGroup, etc. remain the same)
-    const loadGroupsAndBalance = () => {
+  const loadGroupsFromFirebase = async () => {
+    if (!user) {
+      console.log('No user authenticated, skipping group load');
+      return;
+    }
+
+    try {
+      setGroupsLoading(true);
+      console.log('Loading groups for user:', user.id);
+      
+      const userGroups = await firebaseService.getUserGroups(user.id);
+      setFirebaseGroups(userGroups);
+      
+      // Convert Firebase groups to legacy format for display
+      const convertedGroups: Group[] = userGroups.map(group => ({
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        avatar: group.coverImageBase64 ? null : '🎭', // Use default emoji if no cover image
+        coverImageUrl: group.coverImageBase64 || null,
+        youOwe: 0, // TODO: Calculate from expenses
+        youAreOwed: 0, // TODO: Calculate from expenses
+        details: [], // TODO: Calculate from expenses
+        moreBalances: 0,
+        members: group.members,
+        createdAt: group.createdAt,
+        totalExpenses: group.totalExpenses,
+      }));
+      
+      setGroups(convertedGroups);
+      console.log(`Loaded ${userGroups.length} groups from Firebase`);
+    } catch (error: any) {
+      console.error('Error loading groups from Firebase:', error);
+      
+      // Show user-friendly error message for specific cases
+      if (error.message.includes('index required')) {
+        console.log('Database configuration needed - using fallback');
+        // For now, keep existing groups and don't show error to user
+      } else if (error.message.includes('permission denied')) {
+        console.log('Permission denied - check Firebase rules');
+      } else {
+        console.log('General error loading groups:', error.message);
+      }
+      
+      // Keep existing groups on error - don't clear the state
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  const loadGroupsAndBalance = async () => {
     setBalanceLoading(true);
-    setTimeout(() => {
-      const mockGroups: Group[] = [
-        {
-          id: '1',
-          name: 'Trip to Goa',
-          avatar: '🎭',
-          youOwe: 500,
-          youAreOwed: 0,
-          details: [
-            { text: 'You owe Alice', amount: 300, type: 'owe' },
-            { text: 'You owe Bob', amount: 200, type: 'owe' },
-          ],
-          moreBalances: 1,
-          totalExpenses: 1000,
-          members: [],
-        },
-        {
-          id: '2',
-          name: 'Birthday Party',
-          avatar: '🎉',
-          youOwe: 0,
-          youAreOwed: 600,
-          details: [{ text: 'Charlie owes you', amount: 600, type: 'owed' }],
-          moreBalances: 0,
-          totalExpenses: 600,
-          members: [],
-        },
-      ];
+    
+    // Load groups from Firebase
+    await loadGroupsFromFirebase();
+    
+    // For now, keep mock balance calculation
+    // TODO: Replace with real expense calculations
+    const mockBalance: OverallBalance = {
+      netBalance: 0,
+      totalYouOwe: 0,
+      totalYouAreOwed: 0,
+      groupBalanceDetails: [],
+    };
 
-      const mockBalance: OverallBalance = {
-        netBalance: 100,
-        totalYouOwe: 500,
-        totalYouAreOwed: 600,
-        groupBalanceDetails: [],
-      };
-
-      setGroups(mockGroups);
-      setOverallBalance(mockBalance);
-      setBalanceLoading(false);
-    }, 1000);
+    setOverallBalance(mockBalance);
+    setBalanceLoading(false);
   };
 
   useEffect(() => {
@@ -151,20 +180,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const handleAddGroup = () => setShowCreateGroup(true);
   const handleCloseCreateGroup = () => setShowCreateGroup(false);
 
-  const handleSaveNewGroup = (newGroup: any) => {
+  const handleSaveNewGroup = (newGroup: FirebaseGroup) => {
+    console.log('New group created:', newGroup);
+    
+    // Convert Firebase group to legacy format for display
     const transformedGroup: Group = {
       id: newGroup.id,
       name: newGroup.name,
       description: newGroup.description,
-      avatar: newGroup.coverImageUrl ? null : '🎭',
-      coverImageUrl: newGroup.coverImageUrl,
+      avatar: newGroup.coverImageBase64 ? null : '🎭',
+      coverImageUrl: newGroup.coverImageBase64 || null,
       youOwe: 0,
       youAreOwed: 0,
       details: [],
       members: newGroup.members || [],
       createdAt: newGroup.createdAt,
-      totalExpenses: 0,
+      totalExpenses: newGroup.totalExpenses,
     };
+    
+    // Add to both Firebase groups and legacy groups
+    setFirebaseGroups(prev => [newGroup, ...prev]);
     setGroups(prev => [transformedGroup, ...prev]);
     setShowCreateGroup(false);
   };
@@ -182,9 +217,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       )
   );
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadGroupsAndBalance();
+    await loadGroupsAndBalance();
     setRefreshing(false);
   };
 
@@ -264,52 +299,75 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={styles.balanceRow}>
               <View style={styles.balanceItem}>
                 <Text style={styles.balanceLabel}>Net Balance</Text>
-                <Text style={styles.balanceValue}>{overallBalance.netBalance}</Text>
+                <Text style={styles.balanceValue}>₹{overallBalance.netBalance}</Text>
               </View>
               <View style={styles.balanceItem}>
                 <Text style={styles.balanceLabel}>You Owe</Text>
-                <Text style={styles.balanceValue}>{overallBalance.totalYouOwe}</Text>
+                <Text style={styles.balanceValue}>₹{overallBalance.totalYouOwe}</Text>
               </View>
               <View style={styles.balanceItem}>
                 <Text style={styles.balanceLabel}>You Are Owed</Text>
-                <Text style={styles.balanceValue}>{overallBalance.totalYouAreOwed}</Text>
+                <Text style={styles.balanceValue}>₹{overallBalance.totalYouAreOwed}</Text>
               </View>
             </View>
           )}
         </View>
 
         {/* Groups List */}
-        {filteredGroups.map(group => (
-          <TouchableOpacity
-            key={group.id}
-            style={styles.groupCard}
-            onPress={() => navigation.navigate('GroupDetail', { group })}
-          >
-            <View style={styles.groupHeader}>
-              <View style={styles.avatarContainer}>
-                {group.coverImageUrl ? (
-                  <Image source={{ uri: group.coverImageUrl }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.avatar}>{group.avatar}</Text>
-                )}
-              </View>
-              <Text style={styles.groupName}>{group.name}</Text>
-            </View>
-            <View style={styles.groupDetails}>
-              {group.details.map((detail, idx) => (
-                <View key={idx} style={styles.detailRow}>
-                  <Text style={styles.detailText}>{detail.text}</Text>
-                  <Text style={styles.detailText}>
-                    {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
-                  </Text>
+        {groupsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primaryButton} />
+            <Text style={styles.loadingText}>Loading groups...</Text>
+          </View>
+        ) : filteredGroups.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="group" size={scaledFontSize.headerLarge * 2} color={colors.secondaryText} />
+            <Text style={styles.emptyText}>No groups yet</Text>
+            <Text style={styles.emptySubtext}>Create your first group to start splitting expenses!</Text>
+          </View>
+        ) : (
+          filteredGroups.map(group => (
+            <TouchableOpacity
+              key={group.id}
+              style={styles.groupCard}
+              onPress={() => navigation.navigate('GroupDetail', { group })}
+            >
+              <View style={styles.groupHeader}>
+                <View style={styles.avatarContainer}>
+                  {group.coverImageUrl ? (
+                    <Image source={{ uri: group.coverImageUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <Text style={styles.avatar}>{group.avatar}</Text>
+                  )}
                 </View>
-              ))}
-              {group.moreBalances ? (
-                <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
-              ) : null}
-            </View>
-          </TouchableOpacity>
-        ))}
+                <View style={styles.groupInfo}>
+                  <Text style={styles.groupName}>{group.name}</Text>
+                  {group.description && (
+                    <Text style={styles.groupDescription}>{group.description}</Text>
+                  )}
+                  <Text style={styles.membersCount}>{group.members?.length || 0} members</Text>
+                </View>
+              </View>
+              <View style={styles.groupDetails}>
+                {group.details.length > 0 ? (
+                  group.details.map((detail, idx) => (
+                    <View key={idx} style={styles.detailRow}>
+                      <Text style={styles.detailText}>{detail.text}</Text>
+                      <Text style={styles.detailText}>
+                        {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noExpensesText}>No expenses yet</Text>
+                )}
+                {group.moreBalances ? (
+                  <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
       {/* Floating Button */}
@@ -409,7 +467,7 @@ const createStyles = (
     },
     groupHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       marginBottom: scale(8),
     },
     avatarContainer: {
@@ -427,10 +485,26 @@ const createStyles = (
       height: scale(50),
       borderRadius: scale(25),
     },
+    groupInfo: {
+      flex: 1,
+      marginLeft: scale(12),
+    },
     groupName: {
       ...typography.text.title,
       color: colors.primaryText,
       fontSize: fonts.title, // Use passed-in font
+    },
+    groupDescription: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      marginTop: scale(2),
+    },
+    membersCount: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      marginTop: scale(4),
     },
     groupDetails: {
       paddingLeft: scale(8),
@@ -449,6 +523,44 @@ const createStyles = (
       ...typography.text.caption,
       color: colors.secondaryText,
       fontSize: fonts.caption, // Use passed-in font
+    },
+    noExpensesText: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      fontStyle: 'italic',
+    },
+    loadingContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: scale(40),
+    },
+    loadingText: {
+      ...typography.text.body,
+      color: colors.secondaryText,
+      fontSize: fonts.body,
+      marginTop: scale(8),
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: scale(60),
+      paddingHorizontal: scale(40),
+    },
+    emptyText: {
+      ...typography.text.title,
+      color: colors.primaryText,
+      fontSize: fonts.title,
+      marginTop: scale(16),
+      textAlign: 'center',
+    },
+    emptySubtext: {
+      ...typography.text.body,
+      color: colors.secondaryText,
+      fontSize: fonts.body,
+      marginTop: scale(8),
+      textAlign: 'center',
+      lineHeight: scale(20),
     },
     floatingButton: {
       position: 'absolute',
