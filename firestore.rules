@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection rules
+    match /users/{userId} {
+      // Allow read/write for authenticated users on their own data
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == userId || 
+         resource.data.phoneNumber == request.auth.token.phone_number);
+      
+      // Allow creation of new user documents
+      allow create: if request.auth != null && 
+        request.resource.data.keys().hasAll(['phoneNumber', 'name', 'createdAt', 'updatedAt', 'isActive']) &&
+        request.resource.data.phoneNumber is string &&
+        request.resource.data.name is string &&
+        request.resource.data.isActive == true;
+    }
+    
+    // For development/testing - allow read/write to users collection
+    // REMOVE THIS IN PRODUCTION
+    match /users/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Groups collection (for future use)
+    match /groups/{groupId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Expenses collection (for future use)  
+    match /expenses/{expenseId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
