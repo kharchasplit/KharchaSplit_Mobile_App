@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import { authService } from '../services/authService';
-import { useTheme } from '../context/ThemeContext';
+import { PhoneStorage } from '../services/phoneStorage';
+import { colors } from '../utils/colors';
 
 interface LoginScreenProps {
   navigation: any;
@@ -21,6 +22,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const { colors } = useTheme();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingLastNumber, setLoadingLastNumber] = useState(false);
 
   const handleSendOTP = async () => {
     if (!phoneNumber.trim()) {
@@ -37,6 +39,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setLoading(true);
     try {
       await authService.sendOTP(cleanedNumber);
+      // Save the number after successful OTP send
+      await PhoneStorage.saveLastPhoneNumber(cleanedNumber);
       Alert.alert('Success', 'OTP sent to your WhatsApp number');
       navigation.navigate('OTPVerification', { phoneNumber: cleanedNumber });
     } catch (error) {
@@ -44,6 +48,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       console.error('Send OTP error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load last used phone number on component mount
+  useEffect(() => {
+    loadLastUsedNumber();
+  }, []);
+
+  const loadLastUsedNumber = async () => {
+    try {
+      setLoadingLastNumber(true);
+      const lastNumber = await PhoneStorage.getLastPhoneNumber();
+      
+      if (lastNumber && lastNumber.length === 10) {
+        setPhoneNumber(lastNumber);
+        console.log('Loaded last used number:', lastNumber);
+      }
+    } catch (error) {
+      console.log('Failed to load last number:', error);
+    } finally {
+      setLoadingLastNumber(false);
     }
   };
 
@@ -63,7 +88,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>KharchaSplit</Text>
-          <Text style={styles.subtitle}>Enter your WhatsApp number</Text>
+          <Text style={styles.subtitle}>
+            {loadingLastNumber ? 'Loading your number...' : 'Enter your WhatsApp number'}
+          </Text>
         </View>
 
         {/* Input Section */}
@@ -74,14 +101,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             </View>
             <TextInput
               style={styles.phoneInput}
-              placeholder="Enter your WhatsApp number"
+              placeholder={loadingLastNumber ? 'Loading...' : 'Enter your WhatsApp number'}
               placeholderTextColor={colors.inputPlaceholder}
               value={phoneNumber}
               onChangeText={formatPhoneNumber}
               keyboardType="phone-pad"
               maxLength={10}
-              editable={!loading}
+              editable={!loading && !loadingLastNumber}
+              autoFocus={!loadingLastNumber && phoneNumber.length === 0}
             />
+            {loadingLastNumber && (
+              <ActivityIndicator 
+                size="small" 
+                color={colors.activeIcon} 
+                style={styles.loadingIndicator}
+              />
+            )}
+            {!loadingLastNumber && phoneNumber.length > 0 && (
+              <TouchableOpacity 
+                onPress={() => {
+                  setPhoneNumber('');
+                  PhoneStorage.clearLastPhoneNumber();
+                }}
+                style={styles.clearButton}
+              >
+                <Text style={styles.clearText}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -164,6 +210,17 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     fontSize: 16,
     color: colors.inputText,
     padding: 0,
+  },
+  loadingIndicator: {
+    marginLeft: 8,
+  },
+  clearButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  clearText: {
+    fontSize: 16,
+    color: colors.secondaryText,
   },
   button: {
     height: 50,

@@ -30,6 +30,10 @@ yarn start
 
 #### Android
 ```bash
+### Step 2: Build and Run the App
+
+#### Android
+```bash
 # Using npm
 npm run android
 
@@ -39,12 +43,17 @@ yarn android
 
 #### iOS
 Before running on iOS, install CocoaPods (only required on first setup or when dependencies change):
+#### iOS
+Before running on iOS, install CocoaPods (only required on first setup or when dependencies change):
 
+```bash
 ```bash
 bundle install
 bundle exec pod install
 ```
 
+Then run:
+```bash
 Then run:
 ```bash
 # Using npm
