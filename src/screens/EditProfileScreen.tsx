@@ -256,7 +256,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: colors.cardBackground,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
     borderBottomColor: colors.secondaryText,
   },
   backButton: {

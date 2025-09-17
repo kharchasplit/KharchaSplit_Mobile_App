@@ -22,12 +22,18 @@ interface ProfileSetupScreenProps {
   };
 }
 
+// --- FIX ---
+// The component props { navigation, route } are destructured in the arguments.
+// All hooks (useTheme) and variable declarations (styles) must go INSIDE the component body.
 export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
   navigation,
   route,
 }) => {
+  // These lines were in the wrong place. They belong inside the function body.
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  // --- END FIX ---
+
   const { phoneNumber } = route.params;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -64,7 +70,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       Alert.alert('Success', 'Profile created successfully!', [
         {
           text: 'OK',
-          onPress: () => navigation.navigate('Home'),
+          onPress: () => navigation.navigate('Home'), // This will now work
         },
       ]);
     } catch (error) {
@@ -81,7 +87,8 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    // All the JSX will now work because `styles` and `colors` are correctly defined
+    <View style={styles.container}> 
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       <ScrollView 
@@ -169,6 +176,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   );
 };
 
+// The createStyles function remains unchanged
 const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,

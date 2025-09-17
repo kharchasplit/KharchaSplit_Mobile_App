@@ -662,7 +662,7 @@ const createStyles = (
     paddingHorizontal: scale(16),
     paddingVertical: scale(12),
     backgroundColor: colors.cardBackground,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
     borderBottomColor: colors.secondaryText,
   },
   headerTitle: { fontSize: fonts.header, fontWeight: "600", color: colors.primaryText },

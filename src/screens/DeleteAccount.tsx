@@ -9,10 +9,14 @@ import {
   Modal,
   Alert,
   TextInput,
+  // --- RESPONSIVE ---
+  useWindowDimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// --- RESPONSIVE ---
+import { typography } from '../utils/typography'; // Assuming path is correct
 
 type DeleteAccountProps = {
   onClose: () => void;
@@ -27,11 +31,38 @@ const CONSEQUENCES = [
 
 export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
   const { colors } = useTheme();
+
+  // --- RESPONSIVE SETUP ---
+  const { width: screenWidth } = useWindowDimensions();
+  const baseWidth = 375;
+  const scale = (size: number) => (screenWidth / baseWidth) * size;
+
+  const scaledFontSize = {
+    xs: scale(typography.fontSize.xs),
+    sm: scale(typography.fontSize.sm),
+    base: scale(typography.fontSize.base),
+    lg: scale(typography.fontSize.lg),
+    xl: scale(typography.fontSize.xl),
+    '2xl': scale(typography.fontSize['2xl']),
+    header: scale(typography.text.header.fontSize),
+    title: scale(typography.text.title.fontSize),
+    subtitle: scale(typography.text.subtitle.fontSize),
+    body: scale(typography.text.body.fontSize),
+    caption: scale(typography.text.caption.fontSize),
+    button: scale(typography.text.button.fontSize),
+  };
+  // --- END RESPONSIVE SETUP ---
+
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  const styles = useMemo(() => createStyles(colors), []);
+  // --- STYLE FIX & RESPONSIVE ---
+  // Pass all dependencies to createStyles and useMemo
+  const styles = useMemo(() => {
+    return createStyles(colors, scale, scaledFontSize);
+  }, [colors, scale, scaledFontSize]);
+  // --- END FIX ---
 
   const validatePassword = useCallback((pwd: string) => {
     if (!pwd.trim()) {
@@ -74,9 +105,10 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
     setPasswordError('');
   }, []);
 
+  // Use style from useMemo
   const ConsequenceItem: React.FC<{ text: string }> = ({ text }) => (
     <View style={styles.consequenceItem}>
-      <Ionicons name="close-circle" size={20} color={colors.error} />
+      <Ionicons name="close-circle" size={scale(20)} color={colors.error} />
       <Text style={styles.consequenceText}>{text}</Text>
     </View>
   );
@@ -93,16 +125,16 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onClose}>
-          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
+          <Ionicons name="arrow-back" size={scale(24)} color={colors.primaryText} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Delete Account</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Warning Icon */}
         <View style={styles.warningContainer}>
-          <Ionicons name="warning" size={60} color={colors.error} />
+          <Ionicons name="warning" size={scale(60)} color={colors.error} />
         </View>
 
         {/* Warning Text */}
@@ -156,7 +188,7 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
         onRequestClose={cancelDelete}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Ionicons name="warning" size={40} color={colors.error} />
+            <Ionicons name="warning" size={scale(40)} color={colors.error} />
             <Text style={styles.modalTitle}>Are you absolutely sure?</Text>
             <Text style={styles.modalText}>
               This action cannot be undone. Your account and all data will be permanently deleted.
@@ -176,7 +208,13 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
   );
 };
 
-const createStyles = () =>
+// --- STYLESHEET FIX & RESPONSIVE ---
+// createStyles now correctly receives colors, scale, and fonts as arguments
+const createStyles = (
+  colors: ReturnType<typeof useTheme>['colors'],
+  scale: (size: number) => number,
+  fonts: { [key: string]: number }
+) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -186,57 +224,68 @@ const createStyles = () =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-    borderBottomColor: colors.cardBackground,
-    backgroundColor: colors.cardBackground,
+      paddingHorizontal: scale(20),
+      paddingVertical: scale(16),
+      borderBottomWidth: 0,
+      borderBottomColor: colors.cardBackground,
+      backgroundColor: colors.cardBackground,
     },
-    backButton: { padding: 4 },
-    headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
-    placeholder: { width: 32 },
+    backButton: { padding: scale(4) },
+    headerTitle: { fontSize: fonts.header, fontWeight: '600', color: colors.primaryText },
+    placeholder: { width: scale(32) },
     scrollView: { flex: 1 },
-    warningContainer: { marginBottom: 16, marginTop: 16, alignItems: 'center' },
+    scrollContent: { paddingBottom: scale(40) }, // Add padding to bottom
+    warningContainer: { marginBottom: scale(16), marginTop: scale(16), alignItems: 'center' },
     warningTitle: {
-      fontSize: 22,
+      fontSize: fonts.xl,
       fontWeight: '700',
       color: colors.error,
-      marginBottom: 16,
+      marginBottom: scale(16),
       textAlign: 'center',
     },
     warningText: {
-      fontSize: 16,
+      fontSize: fonts.body,
       fontWeight: '600',
       color: colors.primaryText,
-      marginBottom: 16,
-      margin: 20,
+      marginBottom: scale(16),
+      marginHorizontal: scale(20),
+      lineHeight: fonts.body * 1.5, // Add line height
     },
-    consequencesList: { width: '100%', marginBottom: 24 },
-    consequenceItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 16 },
-    consequenceText: { fontSize: 16, color: colors.primaryText, marginLeft: 12, flex: 1 },
-    inputContainer: { marginBottom: 24, marginHorizontal: 20 },
+    consequencesList: { width: '100%', marginBottom: scale(24), paddingHorizontal: scale(20) }, // Add padding
+    consequenceItem: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      marginBottom: scale(12),
+    },
+    consequenceText: { 
+      fontSize: fonts.body, 
+      color: colors.primaryText, 
+      marginLeft: scale(12), 
+      flex: 1 
+    },
+    inputContainer: { marginBottom: scale(24), marginHorizontal: scale(20) },
     textInput: {
       borderWidth: 1,
       borderColor: colors.secondaryText,
-      borderRadius: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      fontSize: 16,
+      borderRadius: scale(8),
+      paddingHorizontal: scale(16),
+      paddingVertical: scale(14),
+      fontSize: fonts.body,
       color: colors.primaryText,
       backgroundColor: colors.cardBackground,
       width: '100%',
     },
     textInputError: { borderColor: colors.error },
-    errorText: { color: colors.error, fontSize: 14, marginTop: 8, textAlign: 'left' },
+    errorText: { color: colors.error, fontSize: fonts.caption, marginTop: scale(8), textAlign: 'left' },
     deleteButton: {
       backgroundColor: colors.error,
-      paddingVertical: 16,
-      paddingHorizontal: 32,
-      borderRadius: 12,
-      width: '100%',
+      paddingVertical: scale(16),
+      paddingHorizontal: scale(32),
+      borderRadius: scale(12),
+      marginHorizontal: scale(20), // Add horizontal margin
       alignItems: 'center',
     },
-    deleteButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+    deleteButtonText: { color: '#FFFFFF', fontSize: fonts.button, fontWeight: '600' },
     deleteButtonDisabled: { backgroundColor: colors.inactiveIcon, opacity: 0.6 },
     deleteButtonTextDisabled: { color: colors.secondaryText },
     modalOverlay: {
@@ -244,46 +293,46 @@ const createStyles = () =>
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
-      padding: 20,
+      padding: scale(20),
     },
     modalContent: {
       backgroundColor: colors.background,
-      borderRadius: 16,
-      padding: 24,
+      borderRadius: scale(16),
+      padding: scale(24),
       alignItems: 'center',
       width: '100%',
-      maxWidth: 320,
+      maxWidth: scale(340), // Use scaled max width
     },
     modalTitle: {
-      fontSize: 20,
+      fontSize: fonts.header,
       fontWeight: '700',
       color: colors.primaryText,
-      marginTop: 16,
-      marginBottom: 12,
+      marginTop: scale(16),
+      marginBottom: scale(12),
       textAlign: 'center',
     },
     modalText: {
-      fontSize: 16,
+      fontSize: fonts.body,
       color: colors.secondaryText,
       textAlign: 'center',
-      marginBottom: 24,
-      lineHeight: 22,
+      marginBottom: scale(24),
+      lineHeight: fonts.body * 1.4,
     },
-    modalButtons: { flexDirection: 'row', width: '100%', gap: 12 },
+    modalButtons: { flexDirection: 'row', width: '100%', gap: scale(12) },
     cancelButton: {
       flex: 1,
       backgroundColor: colors.cardBackground,
-      paddingVertical: 12,
-      borderRadius: 8,
+      paddingVertical: scale(12),
+      borderRadius: scale(8),
       alignItems: 'center',
     },
-    cancelButtonText: { color: colors.primaryText, fontSize: 16, fontWeight: '600' },
+    cancelButtonText: { color: colors.primaryText, fontSize: fonts.button, fontWeight: '600' },
     confirmDeleteButton: {
       flex: 1,
       backgroundColor: colors.error,
-      paddingVertical: 12,
-      borderRadius: 8,
+      paddingVertical: scale(12),
+      borderRadius: scale(8),
       alignItems: 'center',
     },
-    confirmDeleteButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+    confirmDeleteButtonText: { color: '#FFFFFF', fontSize: fonts.button, fontWeight: '600' },
   });

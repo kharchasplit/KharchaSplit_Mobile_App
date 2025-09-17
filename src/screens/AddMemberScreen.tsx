@@ -211,7 +211,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingHorizontal: 16,
       paddingVertical: 12,
       backgroundColor: colors.cardBackground,
-      borderBottomWidth: 1,
+      borderBottomWidth: 0,
       borderBottomColor: colors.secondaryText,
     },
     backButton: { padding: 8 },
