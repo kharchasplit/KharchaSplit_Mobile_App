@@ -8,11 +8,10 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
-  Platform,
 } from 'react-native';
 import { authService } from '../services/authService';
 import { PhoneStorage } from '../services/phoneStorage';
-import { colors } from '../utils/colors';
+import { useTheme } from '../context/ThemeContext';
 
 interface LoginScreenProps {
   navigation: any;

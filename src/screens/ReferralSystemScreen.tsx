@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,22 +14,10 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-type ReferralHistoryItem = {
-  id: string;
-  referredUserName?: string;
-  createdAt: Date;
-  status: 'completed' | 'pending' | 'failed' | string;
-};
-
-type ReferralData = {
-  code: string;
-  totalReferrals: number;
-  successfulReferrals: number;
-  pendingReferrals: number;
-  referralHistory: ReferralHistoryItem[];
-};
+import { firebaseService, ReferralData } from '../services/firebaseService';
+import { userStorage } from '../services/userStorage';
 
 type Props = {
   onClose: () => void;
@@ -37,85 +25,186 @@ type Props = {
 
 export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
   const { colors } = useTheme();
-  const [referralData, setReferralData] = useState<ReferralData>({
-    code: 'SP123456',
-    totalReferrals: 0,
-    successfulReferrals: 0,
-    pendingReferrals: 0,
-    referralHistory: [],
-  });
+  const { user, login } = useAuth();
+  const [referralData, setReferralData] = useState<ReferralData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadReferralData();
+  // Generate a default referral code when Firebase data is not available
+  const generateDefaultReferralCode = useCallback((): string => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = 'KS'; // Prefix for KharchaSplit
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }, []);
 
-  const loadReferralData = async () => {
-    setLoading(true);
-    try {
-      // Mock data for now
-      const history: ReferralHistoryItem[] = [
-        {
-          id: '1',
-          referredUserName: 'Alice',
-          createdAt: new Date(),
-          status: 'completed',
-        },
-        {
-          id: '2',
-          referredUserName: 'Bob',
-          createdAt: new Date(),
-          status: 'pending',
-        },
-      ];
+  const loadReferralData = useCallback(async () => {
+    if (!user) {
+      console.log('No user found, cannot load referral data');
+      setLoading(false);
+      return;
+    }
 
-      setReferralData({
-        code: 'SP123456',
-        totalReferrals: history.length,
-        successfulReferrals: history.filter(r => r.status === 'completed').length,
-        pendingReferrals: history.filter(r => r.status === 'pending').length,
-        referralHistory: history,
+    setLoading(true);
+
+    // TEMPORARY: Skip Firebase referral collection completely and use fallback approach
+    console.log('Using fallback approach to avoid Firebase referral collection permission issues');
+
+    try {
+      // Check if user already has a referral code in their profile
+      let referralCode = user.referralCode;
+
+      // If user doesn't have a referral code, generate one and save to Firebase
+      if (!referralCode) {
+        referralCode = generateDefaultReferralCode();
+        console.log('Generated new referral code for user:', referralCode);
+
+        try {
+          // Save the generated referral code to user profile in Firebase
+          const updatedUser = await firebaseService.updateUser(user.id, { referralCode });
+          console.log('Referral code saved to user profile in Firebase');
+
+          // Update local storage and AuthContext to include the new referral code
+          await userStorage.saveUser(updatedUser);
+          login(updatedUser);
+          console.log('User updated in AuthContext with new referral code');
+        } catch (updateError) {
+          console.error('Failed to save referral code to Firebase:', updateError);
+          // Continue with local display even if Firebase save fails
+        }
+      } else {
+        console.log('Using existing referral code from user profile:', referralCode);
+      }
+
+      // Try to load referral history directly from users collection as fallback
+      let referralHistory: any[] = [];
+      let totalReferrals = 0;
+      let successfulReferrals = 0;
+      let pendingReferrals = 0;
+
+      try {
+        console.log('Loading referral history directly from users collection as fallback');
+        const referredUsersSnapshot = await firebaseService.usersCollection
+          .where('referredBy', '==', user.id)
+          .where('isActive', '==', true)
+          .get();
+
+        referredUsersSnapshot.docs.forEach((doc) => {
+          const userData = doc.data() as any;
+          referralHistory.push({
+            id: doc.id,
+            referredUserId: doc.id,
+            referredUserName: userData.firstName || userData.name || 'New User',
+            referredUserPhone: userData.phoneNumber,
+            createdAt: userData.createdAt,
+            status: 'completed', // All existing users are considered completed
+            updatedAt: userData.updatedAt,
+          });
+        });
+
+        // Calculate statistics from actual data
+        totalReferrals = referralHistory.length;
+        successfulReferrals = referralHistory.filter(r => r.status === 'completed').length;
+        pendingReferrals = referralHistory.filter(r => r.status === 'pending').length;
+
+        console.log('Loaded referral history from users collection:', {
+          totalReferrals,
+          successfulReferrals,
+          pendingReferrals,
+          historyCount: referralHistory.length
+        });
+      } catch (historyError) {
+        console.error('Failed to load referral history from users collection:', historyError);
+        // Keep default empty values
+      }
+
+      // Create default referral data with the referral code and actual history (if loaded)
+      const defaultReferralData: ReferralData = {
+        userId: user.id,
+        referralCode,
+        totalReferrals,
+        successfulReferrals,
+        pendingReferrals,
+        referralHistory,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setReferralData(defaultReferralData);
+      console.log('Default referral data set with code and history:', {
+        code: referralCode,
+        totalReferrals,
+        historyCount: referralHistory.length
       });
-    } catch (error) {
-      console.error('Error loading referral data:', error);
-      Alert.alert('Error', 'Failed to load referral data');
+    } catch (fallbackError) {
+      console.error('Error in fallback referral data loading:', fallbackError);
+
+      // Even if everything fails, show basic referral code
+      const basicReferralData: ReferralData = {
+        userId: user.id,
+        referralCode: user.referralCode || generateDefaultReferralCode(),
+        totalReferrals: 0,
+        successfulReferrals: 0,
+        pendingReferrals: 0,
+        referralHistory: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setReferralData(basicReferralData);
+      console.log('Set basic referral data as last resort');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, generateDefaultReferralCode, login]);
+
+  useEffect(() => {
+    loadReferralData();
+  }, [loadReferralData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await loadReferralData();
+    } catch (error) {
+      console.error('Error during refresh:', error);
+      // loadReferralData already handles errors by setting default data
     } finally {
       setRefreshing(false);
     }
   };
 
   const copyReferralCode = () => {
+    if (!referralData) return;
+
     try {
-      Clipboard.setString(referralData.code);
+      Clipboard.setString(referralData.referralCode);
       Alert.alert('Copied!', 'Referral code copied to clipboard');
+      console.log('Referral code copied to clipboard:', referralData.referralCode);
     } catch (error) {
       console.error('Error copying to clipboard:', error);
     }
   };
 
   const shareReferralCode = async () => {
+    if (!referralData) return;
+
     try {
-      const shareMessage = `🎉 Join me on Splitzy!\n\nUse my referral code: ${referralData.code}`;
+      const shareMessage = `🎉 Join me on KharchaSplit!\n\nUse my referral code: ${referralData.referralCode}`;
       await Share.share({
         message: shareMessage,
-        title: 'Join Splitzy with my referral code!',
+        title: 'Join KharchaSplit with my referral code!',
       });
+      console.log('Referral code shared:', referralData.referralCode);
     } catch (error) {
       console.error('Error sharing referral code:', error);
     }
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -174,7 +263,7 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
             <ActivityIndicator size="large" color={colors.primaryButton} />
             <Text style={styles.loadingText}>Loading referral data...</Text>
           </View>
-        ) : (
+        ) : referralData ? (
           <>
             {/* Referral Code Card */}
             <View style={styles.codeCard}>
@@ -190,7 +279,7 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
               </View>
 
               <View style={styles.codeContainer}>
-                <Text style={styles.codeText}>{referralData.code}</Text>
+                <Text style={styles.codeText}>{referralData.referralCode}</Text>
                 <TouchableOpacity
                   style={styles.copyButton}
                   onPress={copyReferralCode}
@@ -281,6 +370,14 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
               )}
             </View>
           </>
+        ) : (
+          <View style={styles.loadingContainer}>
+            <MaterialIcons name="error-outline" size={64} color={colors.secondaryText} />
+            <Text style={styles.loadingText}>Unable to load referral data</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadReferralData}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -468,5 +565,17 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       fontWeight: '500',
       marginLeft: 4,
       textTransform: 'capitalize',
+    },
+    retryButton: {
+      marginTop: 20,
+      backgroundColor: colors.primaryButton,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    retryButtonText: {
+      color: colors.primaryButtonText,
+      fontSize: 16,
+      fontWeight: '600',
     },
   });

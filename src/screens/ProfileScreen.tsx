@@ -16,8 +16,10 @@ import { ReferralSystemScreen } from './ReferralSystemScreen';
 import { Settings } from './Settings';
 import { HelpandSupport } from './HelpandSupport';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationProps } from '../types/navigation';
+import { getProfileImageUri } from '../utils/imageUtils';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 interface UserProfile {
@@ -31,20 +33,29 @@ type ProfileScreenProps = Partial<NavigationProps>;
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   const { colors } = useTheme();
+  const { user, logout, isLoading } = useAuth();
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [showReferralSystem, setShowReferralSystem] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelpandSupport, setShowHelpandSupport] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [loadingProfile] = useState(false);
 
-  // Mock user profile
+  // Use actual user profile from auth context
   const userProfile: UserProfile = {
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john@example.com',
+    firstName: user?.name?.split(' ')[0] || 'User',
+    lastName: user?.name?.split(' ')[1] || '',
+    email: user?.email || user?.phoneNumber || '',
     profileImageUrl: null,
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Failed to logout:', error);
+    }
   };
 
   const menuItems = [
@@ -53,7 +64,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
     { id: 3, title: 'Settings', icon: 'settings', onPress: () => setShowSettings(true) },
     { id: 4, title: 'Referral System', icon: 'card-giftcard', onPress: () => setShowReferralSystem(true) },
     { id: 5, title: 'Help & Support', icon: 'help-outline', onPress: () => setShowHelpandSupport(true) },
-    { id: 6, title: 'Logout', icon: 'logout', onPress: () => console.log('Logout pressed') },
+    {
+      id: 6,
+      title: 'Logout',
+      icon: 'logout',
+      onPress: handleLogout,
+      isLoading: isLoading,
+    },
   ];
 
   const styles = createStyles(colors);
@@ -76,14 +93,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
                 </View>
               ) : (
                 <Image
-                  source={{
-                    uri:
-                      userProfile.profileImageUrl ||
-                      `https://via.placeholder.com/150x150/333/fff?text=${userProfile.firstName.charAt(
-                        0
-                      )}`,
-                  }}
+                  source={{ uri: getProfileImageUri(user || {}) }}
                   style={styles.avatar}
+                  onError={(error) => {
+                    console.log('Profile image failed to load:', error.nativeEvent.error);
+                    console.log('User data:', {
+                      hasProfileImage: !!(user?.profileImage || user?.profileImageBase64),
+                      profileImageLength: (user?.profileImage || user?.profileImageBase64)?.length,
+                      firstName: user?.firstName,
+                      name: user?.name
+                    });
+                  }}
+                  onLoad={() => {
+                    console.log('Profile image loaded successfully');
+                  }}
                 />
               )}
             </View>
@@ -104,13 +127,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
           {menuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.menuItem}
+              style={[
+                styles.menuItem,
+                item.title === 'Logout' && isLoading && { opacity: 0.6 }
+              ]}
               onPress={item.onPress}
               activeOpacity={0.7}
+              disabled={item.title === 'Logout' && isLoading}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <MaterialIcons name={item.icon} size={24} color={colors.primaryText} style={{ marginRight: 16 }} />
-                <Text style={styles.menuTitle}>{item.title}</Text>
+                <MaterialIcons
+                  name={item.icon}
+                  size={24}
+                  color={item.title === 'Logout' ? colors.error || '#EF4444' : colors.primaryText}
+                  style={{ marginRight: 16 }}
+                />
+                <Text style={[
+                  styles.menuTitle,
+                  item.title === 'Logout' && { color: colors.error || '#EF4444' }
+                ]}>{item.title}</Text>
+                {item.title === 'Logout' && isLoading && (
+                  <ActivityIndicator size="small" color={colors.error || '#EF4444'} style={{ marginLeft: 8 }} />
+                )}
               </View>
             </TouchableOpacity>
           ))}

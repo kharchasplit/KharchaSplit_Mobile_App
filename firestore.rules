@@ -28,9 +28,20 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
-    // Expenses collection (for future use)  
+    // Expenses collection (for future use)
     match /expenses/{expenseId} {
       allow read, write: if request.auth != null;
+    }
+
+    // Referrals collection rules - NEW for referral system
+    match /referrals/{userId} {
+      // Users can read/write/create/update their own referral data
+      allow read, write, create, update: if request.auth != null && request.auth.uid == userId;
+
+      // Allow creating referral documents with proper structure
+      allow create: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.data.keys().hasAll(['userId', 'referralCode', 'totalReferrals', 'successfulReferrals', 'pendingReferrals', 'referralHistory', 'createdAt', 'updatedAt']);
     }
   }
 }

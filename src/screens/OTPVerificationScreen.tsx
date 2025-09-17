@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 
 interface OTPVerificationScreenProps {
@@ -31,6 +32,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   route,
 }) => {
   const { phoneNumber } = route.params;
+  const { login } = useAuth();
   const [otp, setOTP] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -104,9 +106,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           if (userProfile) {
             await userStorage.saveUser(userProfile);
             await userStorage.saveAuthToken(userProfile.id);
+            login(userProfile); // Use AuthContext login
           }
-
-          navigation.navigate('Home');
         } else {
           navigation.navigate('ProfileSetup', { phoneNumber });
         }
