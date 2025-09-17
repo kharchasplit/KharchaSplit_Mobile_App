@@ -14,7 +14,7 @@ import {
   AppStateStatus,
 } from 'react-native';
 import { launchImageLibrary, ImageLibraryOptions, Asset } from 'react-native-image-picker';
-import { request, PERMISSIONS, RESULTS, check, openSettings } from 'react-native-permissions';
+import { request, check, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
 import Contacts, { Contact } from 'react-native-contacts';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
@@ -52,29 +52,38 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const [selectedMembers, setSelectedMembers] = useState<FilteredContact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<FilteredContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
-  const [contactsFilterLoading, setContactsFilterLoading] = useState(false);
   const [permissionState, setPermissionState] = useState<{
     status: 'checking' | 'granted' | 'denied' | 'blocked' | 'unavailable';
     hasRequested: boolean;
-  }>({ status: 'checking', hasRequested: false });
+    initialized: boolean;
+  }>({ status: 'checking', hasRequested: false, initialized: false });
 
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const permissionCheckRef = useRef<boolean>(false);
 
   useEffect(() => {
-    checkContactsPermission();
+    // Only check permissions once on mount
+    if (!permissionState.initialized) {
+      console.log('Component mounted, checking contacts permission...');
+      checkContactsPermission();
+    }
+  }, []); // Remove dependencies to prevent re-runs
 
+  useEffect(() => {
     // Listen for app state changes to re-check permissions when returning from settings
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (
-        appStateRef.current.match(/inactive|background/) && 
+        appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active' &&
+        permissionState.initialized &&
         (permissionState.status === 'blocked' || permissionState.status === 'denied')
       ) {
         console.log('App came to foreground, re-checking contacts permission...');
-        checkContactsPermission();
+        setTimeout(() => {
+          checkContactsPermission();
+        }, 500); // Small delay to prevent rapid state changes
       }
       appStateRef.current = nextAppState;
     };
@@ -84,7 +93,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     return () => {
       subscription?.remove();
     };
-  }, [permissionState.status]);
+  }, [permissionState.initialized, permissionState.status]);
 
   const getContactsPermission = () => {
     return Platform.OS === 'android' 
@@ -93,72 +102,86 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   };
 
   const checkContactsPermission = async () => {
+    // Prevent multiple simultaneous permission checks
+    if (permissionCheckRef.current) {
+      console.log('Permission check already in progress, skipping...');
+      return;
+    }
+
     try {
-      setPermissionState(prev => ({ ...prev, status: 'checking' }));
-      
+      permissionCheckRef.current = true;
+
+      // Don't show checking state if already initialized to prevent blinking
+      if (!permissionState.initialized) {
+        setPermissionState(prev => ({ ...prev, status: 'checking' }));
+      }
+
+      console.log('CheckContactsPermission - Using react-native-permissions directly...');
       const permission = getContactsPermission();
       const result = await check(permission);
-      
-      console.log('Contacts permission check result:', result);
-      
+      console.log('CheckContactsPermission - Permission result:', result);
+
       switch (result) {
         case RESULTS.GRANTED:
-          setPermissionState({ status: 'granted', hasRequested: true });
+          console.log('CheckContactsPermission - Setting state to GRANTED');
+          setPermissionState({ status: 'granted', hasRequested: true, initialized: true });
           loadContacts();
           break;
-        case RESULTS.DENIED:
-          setPermissionState({ status: 'denied', hasRequested: false });
-          break;
         case RESULTS.BLOCKED:
-          setPermissionState({ status: 'blocked', hasRequested: true });
+          console.log('CheckContactsPermission - Setting state to BLOCKED');
+          setPermissionState({ status: 'blocked', hasRequested: true, initialized: true });
           break;
         case RESULTS.UNAVAILABLE:
-          setPermissionState({ status: 'unavailable', hasRequested: true });
+          console.log('CheckContactsPermission - Setting state to UNAVAILABLE');
+          setPermissionState({ status: 'unavailable', hasRequested: true, initialized: true });
           break;
+        case RESULTS.DENIED:
         default:
-          setPermissionState({ status: 'denied', hasRequested: false });
+          console.log('CheckContactsPermission - Setting state to DENIED');
+          setPermissionState({ status: 'denied', hasRequested: false, initialized: true });
+          break;
       }
     } catch (error) {
       console.error('Error checking contacts permission:', error);
-      setPermissionState({ status: 'denied', hasRequested: false });
+      setPermissionState({ status: 'denied', hasRequested: false, initialized: true });
+    } finally {
+      permissionCheckRef.current = false;
     }
   };
 
   const requestContactsPermission = async () => {
     try {
       console.log('Requesting contacts permission...');
-      
+
       const permission = getContactsPermission();
       const result = await request(permission);
-      
+
       console.log('Contacts permission request result:', result);
-      
-      setPermissionState(prev => ({ ...prev, hasRequested: true }));
-      
+
       switch (result) {
         case RESULTS.GRANTED:
-          setPermissionState({ status: 'granted', hasRequested: true });
+          setPermissionState({ status: 'granted', hasRequested: true, initialized: true });
           loadContacts();
           break;
         case RESULTS.DENIED:
-          setPermissionState({ status: 'denied', hasRequested: true });
+          setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
           showPermissionDeniedAlert();
           break;
         case RESULTS.BLOCKED:
-          setPermissionState({ status: 'blocked', hasRequested: true });
+          setPermissionState({ status: 'blocked', hasRequested: true, initialized: true });
           showPermissionBlockedAlert();
           break;
         case RESULTS.UNAVAILABLE:
-          setPermissionState({ status: 'unavailable', hasRequested: true });
+          setPermissionState({ status: 'unavailable', hasRequested: true, initialized: true });
           showPermissionUnavailableAlert();
           break;
         default:
-          setPermissionState({ status: 'denied', hasRequested: true });
+          setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
           showPermissionDeniedAlert();
       }
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
-      setPermissionState({ status: 'denied', hasRequested: true });
+      setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
       Alert.alert('Error', 'Failed to request contacts permission. Please try again.');
     }
   };
@@ -193,6 +216,88 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     );
   };
 
+  /**
+   * Direct contacts permission request handler - triggers permission dialog immediately
+   */
+  const handleRequestContacts = async () => {
+    try {
+      setContactsLoading(true);
+      console.log('HandleRequestContacts - Requesting permission directly...');
+
+      // First request permission directly
+      const permission = getContactsPermission();
+      const result = await request(permission);
+      console.log('HandleRequestContacts - Permission request result:', result);
+
+      if (result === RESULTS.GRANTED) {
+        // Permission granted! Now fetch contacts
+        console.log('HandleRequestContacts - Permission granted, fetching contacts...');
+        setPermissionState({ status: 'granted', hasRequested: true, initialized: true });
+
+        try {
+          const contacts = await Contacts.getAll();
+          console.log(`HandleRequestContacts - Fetched ${contacts.length} contacts`);
+
+          // Show all contacts with phone numbers
+          const allContacts: FilteredContact[] = contacts
+            .filter(contact => contact.phoneNumbers && contact.phoneNumbers.length > 0)
+            .map(contact => ({ ...contact, isRegistered: false }));
+
+          console.log(`HandleRequestContacts - Showing ${allContacts.length} contacts`);
+          setFilteredContacts(allContacts);
+        } catch (contactError: any) {
+          console.error('HandleRequestContacts - Error fetching contacts:', contactError);
+          Alert.alert('Error', 'Failed to load contacts. Please try again.');
+        }
+      } else if (result === RESULTS.BLOCKED) {
+        // Permission permanently blocked
+        console.log('HandleRequestContacts - Permission blocked, showing settings dialog...');
+        setPermissionState({ status: 'blocked', hasRequested: true, initialized: true });
+
+        Alert.alert(
+          'Contacts Access Required',
+          'Contacts access has been blocked. To add friends from your contacts, please enable contacts access in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => openSettings().catch(err => console.error('Error opening settings:', err))
+            },
+          ]
+        );
+      } else if (result === RESULTS.UNAVAILABLE) {
+        // Contacts unavailable
+        console.log('HandleRequestContacts - Contacts unavailable...');
+        setPermissionState({ status: 'unavailable', hasRequested: true, initialized: true });
+
+        Alert.alert(
+          'Contacts Unavailable',
+          'Contacts are not available on this device. You can still create groups by entering phone numbers manually.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Permission denied
+        console.log('HandleRequestContacts - Permission denied...');
+        setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
+
+        Alert.alert(
+          'Contacts Access Denied',
+          'You can still create groups, but you\'ll need to add members manually using phone numbers.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Try Again', onPress: handleRequestContacts }
+          ]
+        );
+      }
+    } catch (error: any) {
+      console.error('HandleRequestContacts - Error:', error);
+      setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
+      Alert.alert('Error', error.message || 'Failed to request contacts permission. Please try again.');
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
   const normalizePhoneNumber = (phoneNumber: string): string => {
     // Remove all non-digit characters
     let cleaned = phoneNumber.replace(/\D/g, '');
@@ -215,11 +320,17 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const loadContacts = async () => {
     setContactsLoading(true);
     try {
+      console.log('LoadContacts - Fetching all contacts from device...');
       const contactsList = await Contacts.getAll();
-      setContacts(contactsList);
-      
-      // After loading contacts, filter them based on Firebase users
-      await filterContactsByFirebaseUsers(contactsList);
+      console.log(`LoadContacts - Fetched ${contactsList.length} total contacts`);
+
+      // Show all contacts with phone numbers
+      const allContacts: FilteredContact[] = contactsList
+        .filter(contact => contact.phoneNumbers && contact.phoneNumbers.length > 0)
+        .map(contact => ({ ...contact, isRegistered: false }));
+
+      console.log(`LoadContacts - Showing ${allContacts.length} contacts with phone numbers`);
+      setFilteredContacts(allContacts);
     } catch (error) {
       console.error('Error loading contacts:', error);
       Alert.alert('Error', 'Failed to load contacts.');
@@ -228,75 +339,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     }
   };
 
-  const filterContactsByFirebaseUsers = async (contactsList: Contact[]) => {
-    setContactsFilterLoading(true);
-    try {
-      console.log('Filtering contacts against Firebase users...');
-      
-      // Extract all phone numbers from contacts
-      const phoneNumbers: string[] = [];
-      const contactPhoneMap: { [key: string]: Contact } = {};
-      
-      contactsList.forEach(contact => {
-        if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
-          contact.phoneNumbers.forEach(phone => {
-            const normalizedPhone = normalizePhoneNumber(phone.number);
-            if (normalizedPhone.length >= 10) {
-              phoneNumbers.push(normalizedPhone);
-              contactPhoneMap[normalizedPhone] = contact;
-            }
-          });
-        }
-      });
-
-      console.log(`Extracted ${phoneNumbers.length} phone numbers from ${contactsList.length} contacts`);
-
-      // Check which phone numbers exist in Firebase
-      const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(phoneNumbers);
-      const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
-      
-      // Create user profile map
-      const userProfileMap: { [key: string]: any } = {};
-      registeredUsers.forEach(userProfile => {
-        userProfileMap[userProfile.phoneNumber] = userProfile;
-      });
-
-      // Create filtered contacts with registration status
-      const filtered: FilteredContact[] = [];
-      const processedContactIds = new Set<string>();
-
-      existingPhoneNumbers.forEach(phoneNumber => {
-        const contact = contactPhoneMap[phoneNumber];
-        if (contact && !processedContactIds.has(contact.recordID)) {
-          processedContactIds.add(contact.recordID);
-          
-          // Skip current user
-          if (user && userProfileMap[phoneNumber] && userProfileMap[phoneNumber].id === user.id) {
-            return;
-          }
-
-          filtered.push({
-            ...contact,
-            isRegistered: true,
-            userProfile: userProfileMap[phoneNumber],
-          });
-        }
-      });
-
-      console.log(`Found ${filtered.length} registered contacts out of ${contactsList.length} total contacts`);
-      setFilteredContacts(filtered);
-    } catch (error) {
-      console.error('Error filtering contacts:', error);
-      // If filtering fails, show all contacts with isRegistered: false
-      const fallbackFiltered: FilteredContact[] = contactsList.map(contact => ({
-        ...contact,
-        isRegistered: false,
-      }));
-      setFilteredContacts(fallbackFiltered);
-    } finally {
-      setContactsFilterLoading(false);
-    }
-  };
 
   const handleInputChange = (field: keyof GroupData, value: string) => {
     setGroupData(prev => ({
@@ -485,7 +527,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           
           {permissionState.status === 'granted' && (
             <Text style={styles.sectionSubtitle}>
-              Select from your contacts who are already using KharchaSplit
+              Select from your contacts to add to the group
             </Text>
           )}
 
@@ -503,12 +545,66 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
             </View>
           )}
 
-          {permissionState.status === 'checking' ? (
+          {/* Debug: Current permission state */}
+          {__DEV__ && (
+            <Text style={{color: 'red', fontSize: 12, textAlign: 'center', marginBottom: 10}}>
+              DEBUG: Status={permissionState.status}, Initialized={permissionState.initialized.toString()}, HasRequested={permissionState.hasRequested.toString()}
+            </Text>
+          )}
+
+          {permissionState.status === 'checking' && !permissionState.initialized ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primaryButton} />
               <Text style={styles.loadingText}>Checking permissions...</Text>
             </View>
-          ) : permissionState.status !== 'granted' ? (
+          ) : permissionState.status === 'granted' ? (
+            // Permission granted - show contacts or loading
+            contactsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primaryButton} />
+                <Text style={styles.loadingText}>Loading contacts...</Text>
+              </View>
+            ) : searchFilteredContacts.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.noContactsText}>
+                  {filteredContacts.length === 0
+                    ? "No contacts found"
+                    : "No matching contacts"}
+                </Text>
+                <Text style={styles.noContactsSubtext}>
+                  {filteredContacts.length === 0
+                    ? "Make sure you have contacts with phone numbers"
+                    : "Try a different search term"}
+                </Text>
+              </View>
+            ) : (
+              searchFilteredContacts.map(contact => (
+                <TouchableOpacity
+                  key={contact.recordID}
+                  style={styles.contactItem}
+                  onPress={() => handleSelectMember(contact)}>
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactName}>
+                      {contact.userProfile?.name || contact.displayName}
+                    </Text>
+                    {contact.phoneNumbers && contact.phoneNumbers[0] && (
+                      <Text style={styles.contactPhone}>
+                        {contact.phoneNumbers[0].number}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.contactStatus}>
+                    {selectedMembers.find(m => m.recordID === contact.recordID) && (
+                      <View>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))
+            )
+          ) : (
+            // Permission not granted - show permission UI
             <View style={styles.permissionContainer}>
               {permissionState.status === 'denied' && !permissionState.hasRequested ? (
                 <>
@@ -517,8 +613,16 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                   <Text style={styles.permissionMessage}>
                     Find friends who are already using KharchaSplit and add them to your group easily.
                   </Text>
-                  <TouchableOpacity style={styles.permissionButton} onPress={requestContactsPermission}>
-                    <Text style={styles.permissionButtonText}>Allow Access</Text>
+                  <TouchableOpacity
+                    style={[styles.permissionButton, contactsLoading && styles.saveButtonDisabled]}
+                    onPress={handleRequestContacts}
+                    disabled={contactsLoading}
+                  >
+                    {contactsLoading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.permissionButtonText}>Allow Access</Text>
+                    )}
                   </TouchableOpacity>
                 </>
               ) : permissionState.status === 'denied' && permissionState.hasRequested ? (
@@ -528,7 +632,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                   <Text style={styles.permissionMessage}>
                     You can still create groups, but you'll need to add members manually using phone numbers.
                   </Text>
-                  <TouchableOpacity style={styles.permissionButton} onPress={requestContactsPermission}>
+                  <TouchableOpacity style={styles.permissionButton} onPress={handleRequestContacts}>
                     <Text style={styles.permissionButtonText}>Try Again</Text>
                   </TouchableOpacity>
                 </>
@@ -553,57 +657,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                 </>
               )}
             </View>
-          ) : contactsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primaryButton} />
-              <Text style={styles.loadingText}>Loading contacts...</Text>
-            </View>
-          ) : contactsFilterLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primaryButton} />
-              <Text style={styles.loadingText}>Finding registered users...</Text>
-            </View>
-          ) : searchFilteredContacts.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.noContactsText}>
-                {filteredContacts.length === 0 
-                  ? "No registered contacts found" 
-                  : "No matching contacts"}
-              </Text>
-              <Text style={styles.noContactsSubtext}>
-                {filteredContacts.length === 0 
-                  ? "Invite your friends to join KharchaSplit!"
-                  : "Try a different search term"}
-              </Text>
-            </View>
-          ) : (
-            searchFilteredContacts.map(contact => (
-              <TouchableOpacity
-                key={contact.recordID}
-                style={styles.contactItem}
-                onPress={() => handleSelectMember(contact)}>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>
-                    {contact.userProfile?.name || contact.displayName}
-                  </Text>
-                  {contact.phoneNumbers && contact.phoneNumbers[0] && (
-                    <Text style={styles.contactPhone}>
-                      {contact.phoneNumbers[0].number}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.contactStatus}>
-                  <View style={styles.registeredBadge}>
-                    <Text style={styles.registeredText}>✓ Registered</Text>
-                  </View>
-                  {selectedMembers.find(m => m.recordID === contact.recordID) && (
-                    <View style={{ marginLeft: 8 }}>
-                      <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))
           )}
         </View>
 
@@ -713,17 +766,6 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       flexDirection: 'row',
       alignItems: 'center',
     },
-    registeredBadge: {
-      backgroundColor: colors.success,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 12,
-    },
-    registeredText: {
-      fontSize: 12,
-      color: '#FFFFFF',
-      fontWeight: '500',
-    },
     loadingContainer: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -733,6 +775,12 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       fontSize: 14,
       color: colors.secondaryText,
       marginTop: 8,
+    },
+    loadingSubtext: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 4,
+      textAlign: 'center',
     },
     emptyContainer: {
       alignItems: 'center',

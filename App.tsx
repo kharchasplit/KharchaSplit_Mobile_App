@@ -3,11 +3,14 @@ import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { BiometricProvider, useBiometric } from './src/context/BiometricContext';
 import { AuthenticatedNavigator } from './src/navigation/AuthenticatedNavigator';
 import { UnauthenticatedNavigator } from './src/navigation/AppNavigator';
+import { BiometricAuthScreen } from './src/screens/BiometricAuthScreen';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isBiometricLocked, setBiometricLocked } = useBiometric();
   const { colors } = useTheme();
 
   if (isLoading) {
@@ -23,6 +26,15 @@ const AppContent: React.FC = () => {
     );
   }
 
+  // Show biometric lock screen if user is authenticated but app is biometrically locked
+  if (isAuthenticated && isBiometricLocked) {
+    return (
+      <BiometricAuthScreen
+        onAuthenticated={() => setBiometricLocked(false)}
+      />
+    );
+  }
+
   return (
     <NavigationContainer>
       {isAuthenticated ? <AuthenticatedNavigator /> : <UnauthenticatedNavigator />}
@@ -34,7 +46,9 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <BiometricProvider>
+          <AppContent />
+        </BiometricProvider>
       </AuthProvider>
     </ThemeProvider>
   );

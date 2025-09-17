@@ -38,7 +38,54 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState('');
+  const [validatingReferral, setValidatingReferral] = useState(false);
+  const [referralValid, setReferralValid] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Validate referral code dynamically
+  const validateReferralCode = async (code: string) => {
+    if (!code.trim()) {
+      setReferralValid(null);
+      return;
+    }
+
+    // Format code to uppercase and check basic format
+    const formattedCode = code.trim().toUpperCase();
+    if (!formattedCode.startsWith('KS') || formattedCode.length !== 8) {
+      setReferralValid(false);
+      return;
+    }
+
+    setValidatingReferral(true);
+    try {
+      const { firebaseService } = await import('../services/firebaseService');
+      const isValid = await firebaseService.validateReferralCode(formattedCode);
+      setReferralValid(isValid);
+      console.log('Referral code validation:', formattedCode, isValid ? 'VALID' : 'INVALID');
+    } catch (error) {
+      console.error('Error validating referral code:', error);
+      setReferralValid(false);
+    } finally {
+      setValidatingReferral(false);
+    }
+  };
+
+  // Handle referral code input with debounced validation
+  const handleReferralCodeChange = (text: string) => {
+    const formattedText = text.toUpperCase().replace(/[^A-Z0-9]/g, ''); // Only allow alphanumeric
+    setReferralCode(formattedText);
+
+    // Clear previous validation
+    setReferralValid(null);
+
+    // Debounce validation
+    const timeoutId = setTimeout(() => {
+      validateReferralCode(formattedText);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  };
 
   const handleSaveProfile = async () => {
     if (!firstName.trim()) {
@@ -53,6 +100,12 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
 
     if (email.trim() && !isValidEmail(email)) {
       Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    // Check referral code validity if provided
+    if (referralCode.trim() && referralValid === false) {
+      Alert.alert('Error', 'Please enter a valid referral code or leave it empty');
       return;
     }
 
@@ -82,6 +135,26 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
 
       const userProfile = await firebaseService.createUser(userData);
 
+      // Apply referral code if provided and valid
+      if (referralCode.trim() && referralValid === true) {
+        try {
+          console.log('Applying referral code:', referralCode, 'to user:', userProfile.id);
+          const applied = await firebaseService.applyReferralCode(userProfile.id, referralCode.trim());
+          if (applied) {
+            console.log('Referral code applied successfully');
+            Alert.alert('Success', `Profile created successfully! Referral code ${referralCode} has been applied.`);
+          } else {
+            console.log('Referral code application failed');
+            Alert.alert('Success', 'Profile created successfully! However, the referral code could not be applied.');
+          }
+        } catch (referralError) {
+          console.error('Error applying referral code:', referralError);
+          Alert.alert('Success', 'Profile created successfully! However, there was an issue applying the referral code.');
+        }
+      } else {
+        Alert.alert('Success', 'Profile created successfully!');
+      }
+
       // Save user data locally for quick access
       await userStorage.saveUser(userProfile);
       await userStorage.saveAuthToken(userProfile.id);
@@ -90,8 +163,6 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       login(userProfile);
 
       console.log('User profile created:', userProfile.id);
-
-      Alert.alert('Success', 'Profile created successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to create profile. Please try again.');
       console.error('Save profile error:', error);
@@ -244,6 +315,54 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
               autoCapitalize="none"
               editable={!loading}
             />
+          </View>
+
+          {/* Referral Code Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Referral Code (Optional)</Text>
+            <View style={styles.referralInputContainer}>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.referralInput,
+                  referralValid === true && styles.inputValid,
+                  referralValid === false && styles.inputInvalid
+                ]}
+                placeholder="Enter referral code (e.g., KS2A7B9K)"
+                placeholderTextColor={colors.inputPlaceholder}
+                value={referralCode}
+                onChangeText={handleReferralCodeChange}
+                autoCapitalize="characters"
+                maxLength={8}
+                editable={!loading}
+              />
+              <View style={styles.referralStatusContainer}>
+                {validatingReferral && (
+                  <ActivityIndicator size="small" color={colors.primaryButton} />
+                )}
+                {!validatingReferral && referralValid === true && (
+                  <Text style={styles.validIcon}>✅</Text>
+                )}
+                {!validatingReferral && referralValid === false && (
+                  <Text style={styles.invalidIcon}>❌</Text>
+                )}
+              </View>
+            </View>
+            {referralCode.length > 0 && (
+              <Text style={[
+                styles.referralHint,
+                referralValid === true && { color: colors.success || '#10B981' },
+                referralValid === false && { color: colors.error || '#EF4444' }
+              ]}>
+                {validatingReferral
+                  ? 'Validating referral code...'
+                  : referralValid === true
+                    ? 'Valid referral code!'
+                    : referralValid === false
+                      ? 'Invalid referral code'
+                      : 'Checking referral code...'}
+              </Text>
+            )}
           </View>
 
           <View style={styles.phoneContainer}>
@@ -490,5 +609,43 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     fontSize: 13,
     color: colors.secondaryText,
     textAlign: 'center',
+  },
+  // Referral Code Styles
+  referralInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  referralInput: {
+    flex: 1,
+    paddingRight: 50, // Space for status indicator
+  },
+  inputValid: {
+    borderColor: colors.success || '#10B981',
+    borderWidth: 2,
+  },
+  inputInvalid: {
+    borderColor: colors.error || '#EF4444',
+    borderWidth: 2,
+  },
+  referralStatusContainer: {
+    position: 'absolute',
+    right: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 24,
+    height: 24,
+  },
+  validIcon: {
+    fontSize: 16,
+  },
+  invalidIcon: {
+    fontSize: 16,
+  },
+  referralHint: {
+    fontSize: 12,
+    marginTop: 5,
+    color: colors.secondaryText,
+    fontStyle: 'italic',
   },
 });

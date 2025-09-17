@@ -13,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Notifications } from './Notification';
-import { AccountPrivacy } from './AccountPrivacy';
+import { Biometrics } from './AccountPrivacy';
 import { DevicePermission } from './DevicePermission';
 import { CurrencyPreference } from './CurrencyPreference';
 import { DeleteAccount } from './DeleteAccount';
@@ -26,7 +26,7 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const { colors } = useTheme();
   const [showNotification, setShowNotification] = useState(false);
-  const [showAccountPrivacy, setShowAccountPrivacy] = useState(false);
+  const [showBiometrics, setShowBiometrics] = useState(false);
   const [showDevicePermission, setShowDevicePermission] = useState(false);
   const [showCurrencyPreference, setShowCurrencyPreference] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -40,9 +40,9 @@ export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     },
     {
       id: 2,
-      title: 'Account Privacy',
+      title: 'Biometrics',
       icon: 'person-circle',
-      onPress: () => setShowAccountPrivacy(true),
+      onPress: () => setShowBiometrics(true),
     },
     {
       id: 3,
@@ -107,8 +107,8 @@ export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
         <Notifications onClose={() => setShowNotification(false)} />
       </Modal>
 
-      <Modal visible={showAccountPrivacy} animationType="slide" presentationStyle="pageSheet">
-        <AccountPrivacy onClose={() => setShowAccountPrivacy(false)} />
+      <Modal visible={showBiometrics} animationType="slide" presentationStyle="pageSheet">
+        <Biometrics onClose={() => setShowBiometrics(false)} />
       </Modal>
 
       <Modal visible={showDevicePermission} animationType="slide" presentationStyle="pageSheet">

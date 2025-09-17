@@ -1,107 +1,201 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
-  Modal,
+  Switch,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ReactNativeBiometrics from 'react-native-biometrics';
 import { useTheme } from '../context/ThemeContext';
+import { useBiometric } from '../context/BiometricContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Fingerprint } from './Fingerprint';
-import { FaceID } from './FaceID';
+import { BiometricUtils, BiometricInfo } from '../utils/BiometricUtils';
 
-type AccountPrivacyProps = {
+type BiometricsProps = {
   onClose: () => void;
 };
 
-type Option = {
-  id: number;
-  title: string;
-  icon: string;
-  onPress: () => void;
-};
 
-export const AccountPrivacy: React.FC<AccountPrivacyProps> = ({ onClose }) => {
+export const Biometrics: React.FC<BiometricsProps> = ({ onClose }) => {
   const { colors } = useTheme();
+  const { checkBiometricStatus } = useBiometric();
   const styles = createStyles(colors);
-  const [showFingerprint, setShowFingerprint] = useState(false);
-  const [showFaceID, setShowFaceID] = useState(false);
 
-  const ApplockOptions: Option[] = [
-    {
-      id: 1,
-      title: 'Fingerprint',
-      icon: 'finger-print',
-      onPress: () => setShowFingerprint(true),
-    },
-    {
-      id: 2,
-      title: 'Face ID',
-      icon: 'eye',
-      onPress: () => setShowFaceID(true),
-    },
-  ];
+  // Dynamic biometric states
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricInfo, setBiometricInfo] = useState<BiometricInfo>({
+    available: false,
+    type: 'none',
+    displayName: 'Biometric Authentication',
+    icon: 'shield-checkmark',
+  });
+
+  const rnBiometrics = new ReactNativeBiometrics();
+
+  // Check biometric availability and load saved state
+  useEffect(() => {
+    const initializeBiometrics = async () => {
+      try {
+        console.log('AccountPrivacy - Initializing biometrics...');
+
+        // Use the new BiometricUtils for proper detection
+        const info = await BiometricUtils.getBiometricInfo();
+        console.log('AccountPrivacy - Biometric info detected:', info);
+
+        setBiometricInfo(info);
+
+        // Load saved biometric state
+        const storedState = await AsyncStorage.getItem('biometricEnabled');
+        console.log('AccountPrivacy - Stored biometric enabled state:', storedState);
+
+        if (storedState === 'true' && info.available) {
+          setBiometricEnabled(true);
+          console.log('AccountPrivacy - Biometric enabled in UI');
+        }
+      } catch (error) {
+        console.error('AccountPrivacy - Error checking biometric availability:', error);
+      }
+    };
+
+    initializeBiometrics();
+  }, []);
+
+  // Dynamic biometric toggle handler
+  const handleBiometricToggle = async () => {
+    if (!biometricInfo.available) {
+      Alert.alert(
+        'Biometrics Not Available',
+        'Your device does not support biometric authentication.'
+      );
+      return;
+    }
+
+    if (!biometricEnabled) {
+      try {
+        console.log('AccountPrivacy - Prompting for biometric authentication with:', biometricInfo);
+
+        const result = await BiometricUtils.authenticateWithBiometrics(
+          `Authenticate with ${biometricInfo.displayName}`
+        );
+
+        console.log('AccountPrivacy - Authentication result:', result);
+
+        if (result.success) {
+          setBiometricEnabled(true);
+          await AsyncStorage.setItem('biometricEnabled', 'true');
+          // Refresh the biometric context to update app-level state
+          await checkBiometricStatus();
+          Alert.alert(
+            'Success',
+            `${biometricInfo.displayName} authentication enabled successfully!`
+          );
+          console.log('AccountPrivacy - Biometric authentication enabled');
+        } else {
+          Alert.alert('Authentication Cancelled', 'Biometric setup was cancelled.');
+          console.log('AccountPrivacy - Biometric authentication cancelled:', result.error);
+        }
+      } catch (error) {
+        console.error('AccountPrivacy - Biometric authentication error:', error);
+        Alert.alert(
+          'Authentication Failed',
+          'Failed to authenticate. Please try again.'
+        );
+      }
+    } else {
+      setBiometricEnabled(false);
+      await AsyncStorage.setItem('biometricEnabled', 'false');
+      // Refresh the biometric context to update app-level state
+      await checkBiometricStatus();
+      Alert.alert(
+        'Disabled',
+        `${biometricInfo.displayName} authentication has been disabled.`
+      );
+      console.log('AccountPrivacy - Biometric authentication disabled');
+    }
+  };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
       <ScreenHeader
-        title="Account Privacy"
+        title="Biometrics"
         onBack={onClose}
       />
 
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.text}>App Lock</Text>
-        {ApplockOptions.map(item => (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.option}
-            onPress={item.onPress}
-            activeOpacity={0.7}
-          >
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIconContainer}>
-                <Ionicons
-                  name={item.icon}
-                  size={20}
-                  color={colors.activeIcon}
+        {/* Dynamic Biometric Authentication Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Biometric Authentication</Text>
+
+          {biometricInfo.available ? (
+            <View style={styles.biometricCard}>
+              <View style={styles.biometricHeader}>
+                <View style={styles.biometricIconContainer}>
+                  <Ionicons
+                    name={biometricInfo.icon}
+                    size={24}
+                    color={colors.primaryButton}
+                  />
+                </View>
+                <View style={styles.biometricTextContainer}>
+                  <Text style={styles.biometricTitle}>
+                    Enable {biometricInfo.displayName}
+                  </Text>
+                  <Text style={styles.biometricDescription}>
+                    Use {biometricInfo.displayName.toLowerCase()} to quickly and securely access your account
+                  </Text>
+                </View>
+                <Switch
+                  trackColor={{ false: colors.inactiveIcon, true: colors.primaryButton }}
+                  thumbColor={biometricEnabled ? '#ffffff' : '#f4f3f4'}
+                  ios_backgroundColor={colors.cardBackground}
+                  onValueChange={handleBiometricToggle}
+                  value={biometricEnabled}
                 />
               </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionTitle}>{item.title}</Text>
-              </View>
+
+              {biometricEnabled && (
+                <View style={styles.statusContainer}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success || '#4CAF50'} />
+                  <Text style={styles.statusText}>
+                    {biometricInfo.displayName} authentication is active
+                  </Text>
+                </View>
+              )}
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.inactiveIcon}
-            />
-          </TouchableOpacity>
-        ))}
+          ) : (
+            <View style={styles.unavailableCard}>
+              <Ionicons name="information-circle" size={24} color={colors.secondaryText} />
+              <Text style={styles.unavailableText}>
+                Biometric authentication is not available on this device
+              </Text>
+            </View>
+          )}
+        </View>
 
-        {/* Fingerprint Modal */}
-        <Modal
-          visible={showFingerprint}
-          animationType="slide"
-          presentationStyle="pageSheet"
-        >
-          <Fingerprint onClose={() => setShowFingerprint(false)} />
-        </Modal>
+        {/* Additional Information */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Security Information</Text>
+          <View style={styles.infoCard}>
+            <Ionicons name="shield-checkmark" size={24} color={colors.primaryButton} />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>Your data is secure</Text>
+              <Text style={styles.infoDescription}>
+                Biometric authentication data is stored securely on your device and never shared.
+              </Text>
+            </View>
+          </View>
+        </View>
 
-        {/* Face ID Modal */}
-        <Modal
-          visible={showFaceID}
-          animationType="slide"
-          presentationStyle="pageSheet"
-        >
-          <FaceID onClose={() => setShowFaceID(false)} />
-        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -112,47 +206,120 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     flex: 1,
     backgroundColor: colors.background,
   },
-
   scrollView: {
     flex: 1,
+    paddingHorizontal: 16,
   },
-  text: {
-    fontSize: 16,
+
+  // Section styles
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: '600',
     color: colors.primaryText,
     marginBottom: 16,
-    margin: 20,
   },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.secondaryText,
-  },
-  optionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  optionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+
+  // Dynamic biometric card styles
+  biometricCard: {
     backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.secondaryText,
+    shadowColor: colors.primaryText,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  biometricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  biometricIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
-  optionTextContainer: {
+  biometricTextContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  biometricTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primaryText,
+    marginBottom: 4,
+  },
+  biometricDescription: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    lineHeight: 20,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.inactiveIcon,
+  },
+  statusText: {
+    fontSize: 14,
+    color: colors.success || '#4CAF50',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+
+  // Unavailable state styles
+  unavailableCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.secondaryText,
+  },
+  unavailableText: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    marginLeft: 12,
     flex: 1,
   },
-  optionTitle: {
+
+  // Info card styles
+  infoCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.secondaryText,
+  },
+  infoTextContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  infoTitle: {
     fontSize: 16,
+    fontWeight: '600',
     color: colors.primaryText,
-    fontWeight: '500',
+    marginBottom: 4,
+  },
+  infoDescription: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    lineHeight: 20,
   },
 });
 
