@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -7,11 +7,20 @@ import { BiometricProvider, useBiometric } from './src/context/BiometricContext'
 import { AuthenticatedNavigator } from './src/navigation/AuthenticatedNavigator';
 import { UnauthenticatedNavigator } from './src/navigation/AppNavigator';
 import { BiometricAuthScreen } from './src/screens/BiometricAuthScreen';
+import { SplashScreen } from './src/screens/SplashScreen';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBiometricLocked, setBiometricLocked } = useBiometric();
   const { colors } = useTheme();
+  const [showSplash, setShowSplash] = useState(true);
+
+  // Show splash screen first
+  if (showSplash) {
+    return (
+      <SplashScreen onAnimationEnd={() => setShowSplash(false)} />
+    );
+  }
 
   if (isLoading) {
     return (
