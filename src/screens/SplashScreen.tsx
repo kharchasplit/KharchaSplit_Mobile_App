@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Image, StyleSheet, Dimensions } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-
-const { width, height } = Dimensions.get('window');
+import { wp, hp } from '../utils/deviceDimensions';
 
 interface SplashScreenProps {
   onAnimationEnd: () => void;
@@ -37,9 +36,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: width * 0.6,
-    height: height * 0.3,
-    maxWidth: 300,
-    maxHeight: 300,
+    width: wp(60),     // 60% of screen width
+    height: hp(25),    // 25% of screen height
+    maxWidth: wp(80),  // Maximum 80% of screen width
+    maxHeight: hp(30), // Maximum 30% of screen height
   },
 });

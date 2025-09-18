@@ -3,6 +3,8 @@ import { View } from 'react-native';
 import { createBottomTabNavigator, BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useTheme } from '../context/ThemeContext';
+import { iconSizes, spacing, vs } from '../utils/deviceDimensions';
+import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
@@ -47,25 +49,25 @@ const TabBarIcon: React.FC<TabBarIconProps> = ({ name, focused }) => {
       case 'Home':
         return <MaterialIcons
           name="group"
-          size={24}
+          size={iconSizes.md}
           color={focused ? colors.activeIcon : colors.inactiveIcon}
         />;
       case 'Activity':
         return <MaterialIcons
           name="notifications"
-          size={24}
+          size={iconSizes.md}
           color={focused ? colors.activeIcon : colors.inactiveIcon}
         />;
       case 'Profile':
         return <Ionicons
           name="person"
-          size={24}
+          size={iconSizes.md}
           color={focused ? colors.activeIcon : colors.inactiveIcon}
         />;
       default:
         return <MaterialIcons
           name="error"
-          size={24}
+          size={iconSizes.md}
           color={focused ? colors.activeIcon : colors.inactiveIcon}
         />;
     }
@@ -106,9 +108,9 @@ export const AuthenticatedNavigator: React.FC = () => {
           backgroundColor: colors.cardBackground,
           borderTopColor: colors.background,
           borderTopWidth: 1,
-          paddingTop: 8,
-          paddingBottom: 8,
-          height: 60,
+          paddingTop: spacing.sm,
+          paddingBottom: spacing.sm,
+          height: vs(64), // 64px scaled vertically
         },
         headerStyle: {
           backgroundColor: colors.cardBackground,
@@ -116,9 +118,11 @@ export const AuthenticatedNavigator: React.FC = () => {
           borderBottomWidth: 1,
         },
         headerTitleStyle: {
-          fontSize: 18,
-          fontWeight: '600',
+          ...typography.text.navTitle,
           color: colors.primaryText,
+        },
+        tabBarLabelStyle: {
+          ...typography.text.tabLabel,
         },
         headerTintColor: colors.activeIcon,
       })}
