@@ -324,18 +324,76 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       const contactsList = await Contacts.getAll();
       console.log(`LoadContacts - Fetched ${contactsList.length} total contacts`);
 
-      // Show all contacts with phone numbers
-      const allContacts: FilteredContact[] = contactsList
-        .filter(contact => contact.phoneNumbers && contact.phoneNumbers.length > 0)
-        .map(contact => ({ ...contact, isRegistered: false }));
-
-      console.log(`LoadContacts - Showing ${allContacts.length} contacts with phone numbers`);
-      setFilteredContacts(allContacts);
+      // After loading contacts, filter them based on Firebase users
+      await filterContactsByFirebaseUsers(contactsList);
     } catch (error) {
       console.error('Error loading contacts:', error);
       Alert.alert('Error', 'Failed to load contacts.');
     } finally {
       setContactsLoading(false);
+    }
+  };
+
+  const filterContactsByFirebaseUsers = async (contactsList: Contact[]) => {
+    try {
+      console.log('Filtering contacts against Firebase users...');
+      
+      // Extract all phone numbers from contacts
+      const phoneNumbers: string[] = [];
+      const contactPhoneMap: { [key: string]: Contact } = {};
+      
+      contactsList.forEach(contact => {
+        if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+          contact.phoneNumbers.forEach(phone => {
+            const normalizedPhone = normalizePhoneNumber(phone.number);
+            if (normalizedPhone.length >= 10) {
+              phoneNumbers.push(normalizedPhone);
+              contactPhoneMap[normalizedPhone] = contact;
+            }
+          });
+        }
+      });
+
+      console.log(`Extracted ${phoneNumbers.length} phone numbers from ${contactsList.length} contacts`);
+
+      // Check which phone numbers exist in Firebase
+      const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(phoneNumbers);
+      const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
+      
+      // Create user profile map
+      const userProfileMap: { [key: string]: any } = {};
+      registeredUsers.forEach(userProfile => {
+        userProfileMap[userProfile.phoneNumber] = userProfile;
+      });
+
+      // Create filtered contacts with registration status - ONLY registered users
+      const filtered: FilteredContact[] = [];
+      const processedContactIds = new Set<string>();
+
+      existingPhoneNumbers.forEach(phoneNumber => {
+        const contact = contactPhoneMap[phoneNumber];
+        if (contact && !processedContactIds.has(contact.recordID)) {
+          processedContactIds.add(contact.recordID);
+          
+          // Skip current user
+          if (user && userProfileMap[phoneNumber] && userProfileMap[phoneNumber].id === user.id) {
+            return;
+          }
+
+          filtered.push({
+            ...contact,
+            isRegistered: true,
+            userProfile: userProfileMap[phoneNumber],
+          });
+        }
+      });
+
+      console.log(`Found ${filtered.length} registered contacts out of ${contactsList.length} total contacts`);
+      setFilteredContacts(filtered);
+    } catch (error) {
+      console.error('Error filtering contacts:', error);
+      // If filtering fails, show empty array instead of all contacts
+      setFilteredContacts([]);
     }
   };
 
