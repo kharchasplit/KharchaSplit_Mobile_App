@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
+  Share,
 } from 'react-native';
 import { launchImageLibrary, ImageLibraryOptions, Asset } from 'react-native-image-picker';
 import { request, check, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
@@ -238,13 +239,9 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           const contacts = await Contacts.getAll();
           console.log(`HandleRequestContacts - Fetched ${contacts.length} contacts`);
 
-          // Show all contacts with phone numbers
-          const allContacts: FilteredContact[] = contacts
-            .filter(contact => contact.phoneNumbers && contact.phoneNumbers.length > 0)
-            .map(contact => ({ ...contact, isRegistered: false }));
-
-          console.log(`HandleRequestContacts - Showing ${allContacts.length} contacts`);
-          setFilteredContacts(allContacts);
+          // Process contacts in background for faster UI response
+          setContactsLoading(false); // Stop loading immediately
+          filterContactsByFirebaseUsers(contacts);
         } catch (contactError: any) {
           console.error('HandleRequestContacts - Error fetching contacts:', contactError);
           Alert.alert('Error', 'Failed to load contacts. Please try again.');
@@ -320,79 +317,104 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const loadContacts = async () => {
     setContactsLoading(true);
     try {
-      console.log('LoadContacts - Fetching all contacts from device...');
+      console.log('Loading contacts from device...');
       const contactsList = await Contacts.getAll();
-      console.log(`LoadContacts - Fetched ${contactsList.length} total contacts`);
+      console.log(`Fetched ${contactsList.length} contacts`);
 
-      // After loading contacts, filter them based on Firebase users
-      await filterContactsByFirebaseUsers(contactsList);
+      // Process contacts immediately in background
+      filterContactsByFirebaseUsers(contactsList);
+      
+      // Stop loading immediately after getting contacts
+      setContactsLoading(false);
     } catch (error) {
       console.error('Error loading contacts:', error);
       Alert.alert('Error', 'Failed to load contacts.');
-    } finally {
       setContactsLoading(false);
     }
   };
 
   const filterContactsByFirebaseUsers = async (contactsList: Contact[]) => {
     try {
-      console.log('Filtering contacts against Firebase users...');
+      console.log('Processing contacts...');
       
-      // Extract all phone numbers from contacts
+      // First, quickly process all contacts and show them immediately
+      const quickFiltered: FilteredContact[] = [];
       const phoneNumbers: string[] = [];
       const contactPhoneMap: { [key: string]: Contact } = {};
-      
-      contactsList.forEach(contact => {
-        if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
-          contact.phoneNumbers.forEach(phone => {
-            const normalizedPhone = normalizePhoneNumber(phone.number);
-            if (normalizedPhone.length >= 10) {
-              phoneNumbers.push(normalizedPhone);
-              contactPhoneMap[normalizedPhone] = contact;
-            }
-          });
-        }
-      });
-
-      console.log(`Extracted ${phoneNumbers.length} phone numbers from ${contactsList.length} contacts`);
-
-      // Check which phone numbers exist in Firebase
-      const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(phoneNumbers);
-      const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
-      
-      // Create user profile map
-      const userProfileMap: { [key: string]: any } = {};
-      registeredUsers.forEach(userProfile => {
-        userProfileMap[userProfile.phoneNumber] = userProfile;
-      });
-
-      // Create filtered contacts with registration status - ONLY registered users
-      const filtered: FilteredContact[] = [];
       const processedContactIds = new Set<string>();
 
-      existingPhoneNumbers.forEach(phoneNumber => {
-        const contact = contactPhoneMap[phoneNumber];
-        if (contact && !processedContactIds.has(contact.recordID)) {
+      // Quick pass - show all contacts immediately as unregistered
+      contactsList.forEach(contact => {
+        if (contact.phoneNumbers && contact.phoneNumbers.length > 0 && !processedContactIds.has(contact.recordID)) {
           processedContactIds.add(contact.recordID);
           
-          // Skip current user
-          if (user && userProfileMap[phoneNumber] && userProfileMap[phoneNumber].id === user.id) {
-            return;
+          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+          if (primaryPhone.length >= 10) {
+            phoneNumbers.push(primaryPhone);
+            contactPhoneMap[primaryPhone] = contact;
+            
+            quickFiltered.push({
+              ...contact,
+              isRegistered: false, // Start with false, will update later
+              userProfile: undefined,
+            });
           }
-
-          filtered.push({
-            ...contact,
-            isRegistered: true,
-            userProfile: userProfileMap[phoneNumber],
-          });
         }
       });
 
-      console.log(`Found ${filtered.length} registered contacts out of ${contactsList.length} total contacts`);
-      setFilteredContacts(filtered);
+      // Show contacts immediately
+      console.log(`Showing ${quickFiltered.length} contacts immediately`);
+      setFilteredContacts(quickFiltered);
+
+      // Background Firebase check - only if we have phone numbers to check
+      if (phoneNumbers.length > 0) {
+        console.log(`Checking registration status for ${phoneNumbers.length} contacts...`);
+        
+        // Batch process in smaller chunks for better performance
+        const BATCH_SIZE = 50;
+        const registeredPhones = new Set<string>();
+        const userProfileMap: { [key: string]: any } = {};
+
+        for (let i = 0; i < phoneNumbers.length; i += BATCH_SIZE) {
+          const batch = phoneNumbers.slice(i, i + BATCH_SIZE);
+          
+          try {
+            const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(batch);
+            const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
+            
+            // Add to our sets
+            existingPhoneNumbers.forEach(phone => registeredPhones.add(phone));
+            registeredUsers.forEach(userProfile => {
+              userProfileMap[userProfile.phoneNumber] = userProfile;
+            });
+          } catch (batchError) {
+            console.error(`Error processing batch ${i}-${i + BATCH_SIZE}:`, batchError);
+            // Continue with next batch even if this one fails
+          }
+        }
+
+        // Update contacts with registration status
+        const updatedContacts = quickFiltered.map(contact => {
+          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+          const isRegistered = registeredPhones.has(primaryPhone);
+          
+          // Skip current user
+          if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
+            return null;
+          }
+
+          return {
+            ...contact,
+            isRegistered,
+            userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
+          };
+        }).filter(Boolean) as FilteredContact[];
+
+        console.log(`Updated ${updatedContacts.length} contacts with registration status`);
+        setFilteredContacts(updatedContacts);
+      }
     } catch (error) {
-      console.error('Error filtering contacts:', error);
-      // If filtering fails, show empty array instead of all contacts
+      console.error('Error processing contacts:', error);
       setFilteredContacts([]);
     }
   };
@@ -406,12 +428,38 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   };
 
   const handleSelectMember = (contact: FilteredContact) => {
+    // Only allow adding registered members to group
+    if (!contact.isRegistered) {
+      return;
+    }
+
     const isSelected = selectedMembers.find(member => member.recordID === contact.recordID);
 
     if (isSelected) {
       setSelectedMembers(prev => prev.filter(member => member.recordID !== contact.recordID));
     } else {
       setSelectedMembers(prev => [...prev, contact]);
+    }
+  };
+
+  const handleInviteContact = async (contact: FilteredContact) => {
+    try {
+      const contactName = contact.displayName || 'Friend';
+      const userReferralCode = user?.referralCode || user?.id || 'KHARCHASPLIT';
+      
+      // Create invitation message with referral code
+      const inviteMessage = `Hi ${contactName}! 👋\n\nI'm using KharchaSplit to split expenses with friends and family. It's super easy to track shared costs and settle payments!\n\n🎁 Join using my referral code: ${userReferralCode}\n\nDownload KharchaSplit now:\n📱 Android: https://play.google.com/store/apps/details?id=com.kharchasplit\n🍎 iOS: https://apps.apple.com/app/kharchasplit\n\nLet's split smarter together! 💰`;
+
+      // Share the invitation
+      await Share.share({
+        message: inviteMessage,
+        title: 'Join KharchaSplit with my referral code!',
+      });
+
+      console.log(`Invited ${contactName} with referral code: ${userReferralCode}`);
+    } catch (error) {
+      console.error('Error sharing invitation:', error);
+      Alert.alert('Error', 'Failed to share invitation. Please try again.');
     }
   };
 
@@ -513,14 +561,34 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     }
   };
 
-  // Filter contacts based on search query (only registered contacts)
-  const searchFilteredContacts = filteredContacts.filter(contact =>
-    contact.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (contact.userProfile?.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    contact.phoneNumbers?.some(phone => 
+  // Filter contacts based on search query (all contacts - registered and unregistered)
+  const searchFilteredContacts = filteredContacts.filter(contact => {
+    // If no search query, show all contacts
+    if (!searchQuery.trim()) {
+      return true;
+    }
+    
+    const searchLower = searchQuery.toLowerCase().trim();
+    
+    // Search by display name
+    if (contact.displayName?.toLowerCase().includes(searchLower)) {
+      return true;
+    }
+    
+    // Search by registered user profile name
+    if (contact.userProfile?.name?.toLowerCase().includes(searchLower)) {
+      return true;
+    }
+    
+    // Search by phone number (digits only)
+    if (contact.phoneNumbers?.some(phone => 
       phone.number.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, ''))
-    )
-  );
+    )) {
+      return true;
+    }
+    
+    return false;
+  });
 
   const styles = createStyles(colors);
   return (
@@ -585,7 +653,11 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           
           {permissionState.status === 'granted' && (
             <Text style={styles.sectionSubtitle}>
-              Select from your contacts to add to the group
+              {filteredContacts.length > 0 ? (
+                `${filteredContacts.filter(c => c.isRegistered).length} registered • ${filteredContacts.filter(c => !c.isRegistered).length} can be invited`
+              ) : (
+                'Select registered contacts or invite friends to join KharchaSplit'
+              )}
             </Text>
           )}
 
@@ -596,18 +668,28 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
-                onChangeText={setSearchQuery}
+                onChangeText={(text) => {
+                  console.log('Search query changed:', text);
+                  setSearchQuery(text);
+                }}
                 placeholder="Search Person or Phone Number"
                 placeholderTextColor={colors.secondaryText}
+                autoCorrect={false}
+                autoCapitalize="none"
               />
             </View>
           )}
 
           {/* Debug: Current permission state */}
           {__DEV__ && (
-            <Text style={{color: 'red', fontSize: 12, textAlign: 'center', marginBottom: 10}}>
-              DEBUG: Status={permissionState.status}, Initialized={permissionState.initialized.toString()}, HasRequested={permissionState.hasRequested.toString()}
-            </Text>
+            <View style={{marginBottom: 10}}>
+              <Text style={{color: 'red', fontSize: 12, textAlign: 'center'}}>
+                DEBUG: Status={permissionState.status}, Initialized={permissionState.initialized.toString()}, HasRequested={permissionState.hasRequested.toString()}
+              </Text>
+              <Text style={{color: 'blue', fontSize: 12, textAlign: 'center'}}>
+                Total: {filteredContacts.length}, Filtered: {searchFilteredContacts.length}, Query: "{searchQuery}"
+              </Text>
+            </View>
           )}
 
           {permissionState.status === 'checking' && !permissionState.initialized ? (
@@ -637,28 +719,63 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
               </View>
             ) : (
               searchFilteredContacts.map(contact => (
-                <TouchableOpacity
-                  key={contact.recordID}
-                  style={styles.contactItem}
-                  onPress={() => handleSelectMember(contact)}>
+                <View key={contact.recordID} style={styles.contactItem}>
                   <View style={styles.contactInfo}>
-                    <Text style={styles.contactName}>
-                      {contact.userProfile?.name || contact.displayName}
-                    </Text>
+                    <View style={styles.contactHeader}>
+                      <Text style={styles.contactName}>
+                        {contact.userProfile?.name || contact.displayName}
+                      </Text>
+                      <View style={[
+                        styles.statusTag,
+                        contact.isRegistered ? styles.registeredTag : styles.unregisteredTag
+                      ]}>
+                        <Text style={[
+                          styles.statusTagText,
+                          contact.isRegistered ? styles.registeredTagText : styles.unregisteredTagText
+                        ]}>
+                          {contact.isRegistered ? 'Registered' : 'Invite'}
+                        </Text>
+                      </View>
+                    </View>
                     {contact.phoneNumbers && contact.phoneNumbers[0] && (
                       <Text style={styles.contactPhone}>
                         {contact.phoneNumbers[0].number}
                       </Text>
                     )}
                   </View>
-                  <View style={styles.contactStatus}>
-                    {selectedMembers.find(m => m.recordID === contact.recordID) && (
-                      <View>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                      </View>
+                  <View style={styles.contactActions}>
+                    {contact.isRegistered ? (
+                      // Registered user - show Add/Remove button
+                      <TouchableOpacity
+                        style={[
+                          styles.actionButton,
+                          selectedMembers.find(m => m.recordID === contact.recordID)
+                            ? styles.removeButton
+                            : styles.addButton
+                        ]}
+                        onPress={() => handleSelectMember(contact)}
+                      >
+                        <Ionicons 
+                          name={selectedMembers.find(m => m.recordID === contact.recordID) ? "checkmark" : "add"} 
+                          size={16} 
+                          color="white" 
+                        />
+                        <Text style={styles.actionButtonText}>
+                          {selectedMembers.find(m => m.recordID === contact.recordID) ? 'Added' : 'Add'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      // Unregistered user - show Invite button
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.inviteButton]}
+                        onPress={() => handleInviteContact(contact)}
+                      >
+                        <Ionicons name="share-outline" size={16} color="white" />
+                        <Text style={styles.actionButtonText}>Invite</Text>
+                      </TouchableOpacity>
                     )}
                   </View>
-                </TouchableOpacity>
+                </View>
               ))
             )
           ) : (
@@ -804,21 +921,78 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: 12,
+      paddingHorizontal: 4,
       borderBottomWidth: 1,
       borderBottomColor: colors.cardBackground,
     },
     contactInfo: {
       flex: 1,
     },
+    contactHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
     contactName: { 
       fontSize: 16, 
       fontWeight: '600', 
-      color: colors.primaryText 
+      color: colors.primaryText,
+      flex: 1,
     },
     contactPhone: {
       fontSize: 14,
       color: colors.secondaryText,
       marginTop: 2,
+    },
+    statusTag: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginLeft: 8,
+    },
+    registeredTag: {
+      backgroundColor: colors.success + '20',
+    },
+    unregisteredTag: {
+      backgroundColor: colors.primaryButton + '20',
+    },
+    statusTagText: {
+      fontSize: 12,
+      fontWeight: '500',
+    },
+    registeredTagText: {
+      color: colors.success,
+    },
+    unregisteredTagText: {
+      color: colors.primaryButton,
+    },
+    contactActions: {
+      marginLeft: 12,
+    },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 16,
+      minWidth: 70,
+      justifyContent: 'center',
+    },
+    addButton: {
+      backgroundColor: colors.success,
+    },
+    removeButton: {
+      backgroundColor: colors.secondaryText,
+    },
+    inviteButton: {
+      backgroundColor: colors.primaryButton,
+    },
+    actionButtonText: {
+      color: 'white',
+      fontSize: 12,
+      fontWeight: '600',
+      marginLeft: 4,
     },
     contactStatus: {
       flexDirection: 'row',
