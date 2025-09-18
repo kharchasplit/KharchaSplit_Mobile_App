@@ -12,6 +12,7 @@ import {
 import { authService } from '../services/authService';
 import { PhoneStorage } from '../services/phoneStorage';
 import { useTheme } from '../context/ThemeContext';
+import { wp, hp, ms, s, vs } from '../utils/deviceDimensions';
 
 interface LoginScreenProps {
   navigation: any;
@@ -164,69 +165,69 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: s(20),
     justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: vs(60),
   },
   title: {
-    fontSize: 32,
+    fontSize: ms(32),
     fontWeight: 'bold',
     color: colors.primaryText,
-    marginBottom: 10,
+    marginBottom: vs(10),
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.secondaryText,
     textAlign: 'center',
   },
   inputContainer: {
-    marginBottom: 30,
+    marginBottom: vs(30),
   },
   phoneInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.inputBackground,
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 50,
+    borderRadius: s(12),
+    paddingHorizontal: s(15),
+    height: vs(50),
   },
   countryCode: {
-    paddingRight: 10,
-    marginRight: 10,
-    borderRightWidth: 1,
+    paddingRight: s(10),
+    marginRight: s(10),
+    borderRightWidth: s(1),
     borderRightColor: colors.secondaryText,
   },
   countryText: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.primaryText,
     fontWeight: '600',
   },
   phoneInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.inputText,
     padding: 0,
   },
   loadingIndicator: {
-    marginLeft: 8,
+    marginLeft: s(8),
   },
   clearButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: s(8),
+    paddingVertical: vs(4),
   },
   clearText: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.secondaryText,
   },
   button: {
-    height: 50,
-    borderRadius: 12,
+    height: vs(50),
+    borderRadius: s(12),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: vs(40),
   },
   buttonActive: {
     backgroundColor: colors.primaryButton,
@@ -235,7 +236,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     backgroundColor: colors.secondaryText,
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: ms(16),
     fontWeight: 'bold',
     color: colors.primaryButtonText,
   },
@@ -243,7 +244,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
+    fontSize: ms(12),
     color: colors.secondaryText,
     textAlign: 'center',
   },

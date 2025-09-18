@@ -241,7 +241,9 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
           // Process contacts in background for faster UI response
           setContactsLoading(false); // Stop loading immediately
-          filterContactsByFirebaseUsers(contacts);
+          setTimeout(() => {
+            filterContactsByFirebaseUsers(contacts);
+          }, 50);
         } catch (contactError: any) {
           console.error('HandleRequestContacts - Error fetching contacts:', contactError);
           Alert.alert('Error', 'Failed to load contacts. Please try again.');
@@ -321,11 +323,13 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       const contactsList = await Contacts.getAll();
       console.log(`Fetched ${contactsList.length} contacts`);
 
-      // Process contacts immediately in background
-      filterContactsByFirebaseUsers(contactsList);
-      
-      // Stop loading immediately after getting contacts
+      // Stop loading immediately after getting device contacts
       setContactsLoading(false);
+
+      // Process contacts in background (non-blocking)
+      setTimeout(() => {
+        filterContactsByFirebaseUsers(contactsList);
+      }, 50); // Small delay to ensure UI updates first
     } catch (error) {
       console.error('Error loading contacts:', error);
       Alert.alert('Error', 'Failed to load contacts.');
@@ -336,7 +340,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const filterContactsByFirebaseUsers = async (contactsList: Contact[]) => {
     try {
       console.log('Processing contacts...');
-      
+
       // First, quickly process all contacts and show them immediately
       const quickFiltered: FilteredContact[] = [];
       const phoneNumbers: string[] = [];
@@ -347,12 +351,12 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       contactsList.forEach(contact => {
         if (contact.phoneNumbers && contact.phoneNumbers.length > 0 && !processedContactIds.has(contact.recordID)) {
           processedContactIds.add(contact.recordID);
-          
+
           const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
           if (primaryPhone.length >= 10) {
             phoneNumbers.push(primaryPhone);
             contactPhoneMap[primaryPhone] = contact;
-            
+
             quickFiltered.push({
               ...contact,
               isRegistered: false, // Start with false, will update later
@@ -369,49 +373,43 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       // Background Firebase check - only if we have phone numbers to check
       if (phoneNumbers.length > 0) {
         console.log(`Checking registration status for ${phoneNumbers.length} contacts...`);
-        
-        // Batch process in smaller chunks for better performance
-        const BATCH_SIZE = 50;
-        const registeredPhones = new Set<string>();
-        const userProfileMap: { [key: string]: any } = {};
 
-        for (let i = 0; i < phoneNumbers.length; i += BATCH_SIZE) {
-          const batch = phoneNumbers.slice(i, i + BATCH_SIZE);
-          
-          try {
-            const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(batch);
-            const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
-            
-            // Add to our sets
-            existingPhoneNumbers.forEach(phone => registeredPhones.add(phone));
-            registeredUsers.forEach(userProfile => {
-              userProfileMap[userProfile.phoneNumber] = userProfile;
-            });
-          } catch (batchError) {
-            console.error(`Error processing batch ${i}-${i + BATCH_SIZE}:`, batchError);
-            // Continue with next batch even if this one fails
-          }
+        try {
+          // Single batch call for better performance
+          const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(phoneNumbers);
+          const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
+
+          const registeredPhones = new Set(existingPhoneNumbers);
+          const userProfileMap: { [key: string]: any } = {};
+
+          registeredUsers.forEach(userProfile => {
+            userProfileMap[userProfile.phoneNumber] = userProfile;
+          });
+
+          // Update contacts with registration status
+          const updatedContacts = quickFiltered.map(contact => {
+            const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+            const isRegistered = registeredPhones.has(primaryPhone);
+
+            // Skip current user
+            if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
+              return null;
+            }
+
+            return {
+              ...contact,
+              isRegistered,
+              userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
+            };
+          }).filter(Boolean) as FilteredContact[];
+
+          console.log(`Updated ${updatedContacts.length} contacts with registration status`);
+          setFilteredContacts(updatedContacts);
+        } catch (error) {
+          console.error('Error checking Firebase registration status:', error);
+          // Keep the quickly loaded contacts even if Firebase check fails
+          console.log('Keeping contacts without registration status');
         }
-
-        // Update contacts with registration status
-        const updatedContacts = quickFiltered.map(contact => {
-          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          const isRegistered = registeredPhones.has(primaryPhone);
-          
-          // Skip current user
-          if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
-            return null;
-          }
-
-          return {
-            ...contact,
-            isRegistered,
-            userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
-          };
-        }).filter(Boolean) as FilteredContact[];
-
-        console.log(`Updated ${updatedContacts.length} contacts with registration status`);
-        setFilteredContacts(updatedContacts);
       }
     } catch (error) {
       console.error('Error processing contacts:', error);

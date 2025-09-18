@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { wp, hp, ms, s, vs } from '../utils/deviceDimensions';
 
 
 interface OTPVerificationScreenProps {
@@ -267,38 +268,38 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 20,
+    paddingHorizontal: s(24),
+    paddingTop: vs(40),
+    paddingBottom: vs(20),
   },
   header: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: vs(50),
   },
   title: {
-    fontSize: 24,
+    fontSize: ms(24),
     fontWeight: '700',
     color: colors.primaryText,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: vs(12),
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.secondaryText,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: vs(22),
   },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 40,
+    gap: s(12),
+    marginBottom: vs(40),
   },
   otpBox: {
-    width: 50,
-    height: 60,
-    borderRadius: 12,
+    width: s(50),
+    height: vs(60),
+    borderRadius: s(12),
     backgroundColor: colors.cardBackground,
     borderWidth: 2,
     borderColor: 'rgba(103, 111, 157, 0.3)',
@@ -314,7 +315,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     backgroundColor: colors.cardBackground,
   },
   otpInput: {
-    fontSize: 24,
+    fontSize: ms(24),
     fontWeight: '600',
     color: colors.primaryText,
     width: '100%',
@@ -325,12 +326,12 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     color: colors.primaryText,
   },
   verifyButton: {
-    height: 56,
-    borderRadius: 16,
+    height: vs(56),
+    borderRadius: s(16),
     backgroundColor: colors.cardBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: vs(30),
   },
   verifyButtonActive: {
     backgroundColor: colors.activeIcon,
@@ -339,7 +340,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     opacity: 0.6,
   },
   verifyButtonText: {
-    fontSize: 18,
+    fontSize: ms(18),
     fontWeight: '600',
     color: colors.secondaryText,
   },
@@ -348,26 +349,26 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
   },
   resendContainer: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: vs(30),
   },
   countdownText: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.secondaryText,
   },
   resendButton: {
-    paddingVertical: 8,
+    paddingVertical: vs(8),
   },
   resendText: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.activeIcon,
     fontWeight: '600',
   },
   changeNumberButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: vs(12),
   },
   changeNumberText: {
-    fontSize: 16,
+    fontSize: ms(16),
     color: colors.secondaryText,
     textDecorationLine: 'underline',
   },

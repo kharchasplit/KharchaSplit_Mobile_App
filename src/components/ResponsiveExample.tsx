@@ -38,7 +38,7 @@ export const ResponsiveExample: React.FC = () => {
           Font Scale: {deviceInfo.fontScale.toFixed(2)}
         </Text>
         <Text style={[styles.infoText, { color: colors.secondaryText }]}>
-          Device Type: {deviceInfo.isTablet ? 'Tablet' : deviceInfo.isSmallDevice ? 'Small Phone' : 'Phone'}
+          Device Type: {deviceInfo.isTablet ? 'Tablet' : 'Phone'}
         </Text>
         <Text style={[styles.infoText, { color: colors.secondaryText }]}>
           Size Matters: s(16)={s(16)}, vs(16)={vs(16)}, ms(16)={ms(16)}
@@ -88,7 +88,7 @@ export const ResponsiveExample: React.FC = () => {
 
         {/* Button Example */}
         <View style={[styles.button, { backgroundColor: colors.primaryButton }]}>
-          <Text style={[typography.text.button, { color: colors.buttonText }]}>
+          <Text style={[typography.text.button, { color: colors.primaryButtonText }]}>
             Responsive Button
           </Text>
         </View>
@@ -106,14 +106,14 @@ export const ResponsiveExample: React.FC = () => {
         <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>
           Screen Percentage
         </Text>
-        <View style={[styles.percentageBox, styles.width50, { backgroundColor: colors.accent }]}>
-          <Text style={[typography.text.caption, { color: colors.buttonText }]}>50% Width</Text>
+        <View style={[styles.percentageBox, styles.width50, { backgroundColor: colors.activeIcon }]}>
+          <Text style={[typography.text.caption, { color: colors.primaryButtonText }]}>50% Width</Text>
         </View>
-        <View style={[styles.percentageBox, styles.width75, { backgroundColor: colors.accent }]}>
-          <Text style={[typography.text.caption, { color: colors.buttonText }]}>75% Width</Text>
+        <View style={[styles.percentageBox, styles.width75, { backgroundColor: colors.activeIcon }]}>
+          <Text style={[typography.text.caption, { color: colors.primaryButtonText }]}>75% Width</Text>
         </View>
-        <View style={[styles.percentageBox, styles.width100, { backgroundColor: colors.accent }]}>
-          <Text style={[typography.text.caption, { color: colors.buttonText }]}>100% Width</Text>
+        <View style={[styles.percentageBox, styles.width100, { backgroundColor: colors.activeIcon }]}>
+          <Text style={[typography.text.caption, { color: colors.primaryButtonText }]}>100% Width</Text>
         </View>
       </View>
     </ScrollView>
