@@ -1,4 +1,4 @@
-import firestore from '@react-native-firebase/firestore';
+import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 
 export interface UserProfile {
   id: string;
@@ -85,6 +85,9 @@ export interface Group {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  isCompleted?: boolean; // Whether group is completed
+  completedAt?: string; // When group was completed
+  completedBy?: string; // Who completed the group
   totalExpenses: number;
   currency: string;
 }
@@ -95,6 +98,54 @@ export interface CreateGroup {
   coverImageBase64?: string; // Base64 encoded cover image
   memberPhoneNumbers: string[]; // Phone numbers of members to add
   currency?: string;
+}
+
+export interface ExpenseParticipant {
+  id: string;
+  name: string;
+  amount: number;
+  isYou?: boolean;
+}
+
+export interface GroupExpense {
+  id?: string;
+  groupId: string;
+  description: string;
+  amount: number;
+  category: {
+    id: number;
+    name: string;
+    emoji: string;
+    color: string;
+  };
+  paidBy: {
+    id: string;
+    name: string;
+    isYou?: boolean;
+  };
+  splitType: string;
+  participants: ExpenseParticipant[];
+  receiptBase64?: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  isActive: boolean;
+}
+
+export interface Settlement {
+  id?: string;
+  groupId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
+  status: 'unpaid' | 'pending' | 'paid';
+  createdAt: string;
+  updatedAt: string;
+  paidAt?: string;
+  confirmedAt?: string;
+  paymentNote?: string;
 }
 
 class FirebaseService {
@@ -313,39 +364,39 @@ class FirebaseService {
       }
 
       const users: UserProfile[] = [];
-      const batchSize = 10;
+      const batchSize = 30; // Increased batch size for better performance
+      
+      // Process all batches in parallel for faster lookup
+      const batchPromises: Promise<void>[] = [];
       
       for (let i = 0; i < phoneNumbers.length; i += batchSize) {
         const batch = phoneNumbers.slice(i, i + batchSize);
         
-        try {
-          const querySnapshot = await this._usersCollection
-            .where('phoneNumber', 'in', batch)
-            .where('isActive', '==', true)
-            .get();
+        const batchPromise = (async () => {
+          try {
+            const querySnapshot = await this._usersCollection
+              .where('phoneNumber', 'in', batch)
+              .where('isActive', '==', true)
+              .get();
 
-          querySnapshot.docs.forEach(doc => {
-            const userData = doc.data();
-            users.push({
-              id: doc.id,
-              ...userData,
-            } as UserProfile);
-          });
-        } catch (batchError) {
-          console.warn('Error in batch query, trying individual lookups for batch:', batch);
-          // Fallback: check each number individually
-          for (const phoneNumber of batch) {
-            try {
-              const user = await this.getUserByPhone(phoneNumber);
-              if (user) {
-                users.push(user);
-              }
-            } catch (individualError) {
-              console.warn(`Error getting user for phone number ${phoneNumber}:`, individualError);
-            }
+            querySnapshot.docs.forEach(doc => {
+              const userData = doc.data();
+              users.push({
+                id: doc.id,
+                ...userData,
+              } as UserProfile);
+            });
+          } catch (batchError) {
+            console.warn('Error in batch query for batch:', batch);
+            // Skip this batch instead of individual lookups for performance
           }
-        }
+        })();
+        
+        batchPromises.push(batchPromise);
       }
+      
+      // Wait for all batches to complete
+      await Promise.all(batchPromises);
 
       console.log(`Found ${users.length} user profiles`);
       return users;
@@ -666,15 +717,48 @@ class FirebaseService {
         }
       });
 
+      // Enrich groups with current member profile images
+      const enrichedGroups = await Promise.all(
+        groups.map(async (group) => {
+          try {
+            const enrichedMembers = await Promise.all(
+              group.members.map(async (member) => {
+                try {
+                  const currentUser = await this.getUserById(member.userId);
+                  if (currentUser) {
+                    return {
+                      ...member,
+                      profileImage: currentUser.profileImageBase64 || currentUser.profileImage || member.profileImage,
+                      name: currentUser.name || member.name, // Also update name in case it changed
+                    };
+                  }
+                } catch (memberError) {
+                  console.log(`Failed to enrich member ${member.userId}:`, memberError);
+                }
+                return member; // Return original member if enrichment fails
+              })
+            );
+            
+            return {
+              ...group,
+              members: enrichedMembers,
+            };
+          } catch (groupError) {
+            console.log(`Failed to enrich group ${group.id}:`, groupError);
+            return group; // Return original group if enrichment fails
+          }
+        })
+      );
+
       // Sort by updatedAt on client side
-      groups.sort((a, b) => {
+      enrichedGroups.sort((a, b) => {
         const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
         return bTime - aTime;
       });
 
-      console.log(`Found ${groups.length} groups for user:`, userId);
-      return groups;
+      console.log(`Found and enriched ${enrichedGroups.length} groups for user:`, userId);
+      return enrichedGroups.filter(group => !group.isCompleted); // Only return active groups
     } catch (error: any) {
       console.error('Error getting user groups:', error);
       
@@ -686,6 +770,97 @@ class FirebaseService {
       }
       
       throw new Error('Failed to get user groups');
+    }
+  }
+
+  /**
+   * Get completed groups where user is a member
+   */
+  async getCompletedGroups(userId: string): Promise<Group[]> {
+    try {
+      console.log('Getting completed groups for user:', userId);
+      
+      // Try the simple query first
+      let snapshot;
+      try {
+        snapshot = await this._groupsCollection
+          .where('isActive', '==', true)
+          .get();
+      } catch (indexError: any) {
+        console.log('Retrying with simpler query...');
+        // If even this fails, try without any where clause
+        snapshot = await this._groupsCollection.get();
+      }
+
+      const groups: Group[] = [];
+      snapshot.docs.forEach(doc => {
+        const groupData = doc.data();
+        // Check if group is active, completed, and user is a member
+        const isActive = groupData.isActive !== false; // Default to true if undefined
+        const isCompleted = groupData.isCompleted === true;
+        const isMember = groupData.members && groupData.members.some((member: GroupMember) => member.userId === userId);
+        
+        if (isActive && isCompleted && isMember) {
+          groups.push({
+            id: doc.id,
+            ...groupData,
+          } as Group);
+        }
+      });
+
+      // Enrich groups with current member profile images
+      const enrichedGroups = await Promise.all(
+        groups.map(async (group) => {
+          try {
+            const enrichedMembers = await Promise.all(
+              group.members.map(async (member) => {
+                try {
+                  const currentUser = await this.getUserById(member.userId);
+                  if (currentUser) {
+                    return {
+                      ...member,
+                      profileImage: currentUser.profileImageBase64 || currentUser.profileImage || member.profileImage,
+                      name: currentUser.name || member.name, // Also update name in case it changed
+                    };
+                  }
+                } catch (memberError) {
+                  console.log(`Failed to enrich member ${member.userId}:`, memberError);
+                }
+                return member; // Return original member if enrichment fails
+              })
+            );
+            
+            return {
+              ...group,
+              members: enrichedMembers,
+            };
+          } catch (groupError) {
+            console.log(`Failed to enrich group ${group.id}:`, groupError);
+            return group; // Return original group if enrichment fails
+          }
+        })
+      );
+
+      // Sort by completedAt on client side (most recently completed first)
+      enrichedGroups.sort((a, b) => {
+        const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+
+      console.log(`Found and enriched ${enrichedGroups.length} completed groups for user:`, userId);
+      return enrichedGroups;
+    } catch (error: any) {
+      console.error('Error getting completed groups:', error);
+      
+      // Provide more specific error information
+      if (error.code === 'firestore/permission-denied') {
+        throw new Error('Permission denied: Please check Firebase security rules');
+      } else if (error.code === 'firestore/failed-precondition') {
+        throw new Error('Database index required. Please contact support.');
+      }
+      
+      throw new Error('Failed to get completed groups');
     }
   }
 
@@ -705,10 +880,39 @@ class FirebaseService {
         return null;
       }
 
-      return {
+      const group = {
         id: groupDoc.id,
         ...groupData,
       } as Group;
+
+      // Enrich group with current member profile images
+      try {
+        const enrichedMembers = await Promise.all(
+          group.members.map(async (member) => {
+            try {
+              const currentUser = await this.getUserById(member.userId);
+              if (currentUser) {
+                return {
+                  ...member,
+                  profileImage: currentUser.profileImageBase64 || currentUser.profileImage || member.profileImage,
+                  name: currentUser.name || member.name, // Also update name in case it changed
+                };
+              }
+            } catch (memberError) {
+              console.log(`Failed to enrich member ${member.userId}:`, memberError);
+            }
+            return member; // Return original member if enrichment fails
+          })
+        );
+        
+        return {
+          ...group,
+          members: enrichedMembers,
+        };
+      } catch (enrichError) {
+        console.log(`Failed to enrich group ${groupId}:`, enrichError);
+        return group; // Return original group if enrichment fails
+      }
     } catch (error) {
       console.error('Error fetching group by ID:', error);
       throw new Error('Failed to fetch group data');
@@ -738,6 +942,36 @@ class FirebaseService {
     } catch (error) {
       console.error('Error updating group:', error);
       throw new Error('Failed to update group');
+    }
+  }
+
+  /**
+   * Complete group - marks group as completed and prevents new expenses
+   */
+  async completeGroup(groupId: string, completedBy?: string): Promise<Group> {
+    try {
+      const completedTimestamp = new Date().toISOString();
+      
+      // Update group to completed status
+      await this._groupsCollection.doc(groupId).update({
+        isCompleted: true,
+        completedAt: completedTimestamp,
+        completedBy: completedBy || null,
+        updatedAt: completedTimestamp,
+      });
+
+      console.log('Group completed successfully:', groupId);
+
+      // Return updated group
+      const completedGroup = await this.getGroupById(groupId);
+      if (!completedGroup) {
+        throw new Error('Failed to fetch completed group');
+      }
+
+      return completedGroup;
+    } catch (error) {
+      console.error('Error completing group:', error);
+      throw new Error('Failed to complete group');
     }
   }
 
@@ -844,6 +1078,366 @@ class FirebaseService {
     } catch (error) {
       console.error('Error deactivating group:', error);
       throw new Error('Failed to deactivate group');
+    }
+  }
+
+  // Expense Management Methods
+
+  /**
+   * Create a new expense in a group
+   */
+  async createGroupExpense(groupId: string, expenseData: Omit<GroupExpense, 'id'>): Promise<GroupExpense> {
+    try {
+      console.log('Creating expense for group:', groupId);
+      
+      // Verify group exists
+      const group = await this.getGroupById(groupId);
+      if (!group) {
+        throw new Error('Group not found');
+      }
+
+      // Verify all participants are members of the group
+      const groupMemberIds = group.members.map(m => m.userId);
+      const invalidParticipants = expenseData.participants.filter(
+        p => !groupMemberIds.includes(p.id)
+      );
+      
+      if (invalidParticipants.length > 0) {
+        throw new Error('Some participants are not members of this group');
+      }
+
+      // Create expense document
+      const timestamp = new Date().toISOString();
+      
+      // Filter out undefined values to prevent Firebase errors
+      const cleanExpenseData = Object.fromEntries(
+        Object.entries(expenseData).filter(([_, value]) => value !== undefined)
+      );
+      
+      const expenseDoc = {
+        ...cleanExpenseData,
+        updatedAt: timestamp,
+      };
+
+      // Store expense in group's subcollection
+      const docRef = await this._groupsCollection
+        .doc(groupId)
+        .collection('expenses')
+        .add(expenseDoc);
+      
+      // Update group's total expenses
+      await this._groupsCollection.doc(groupId).update({
+        totalExpenses: firestore.FieldValue.increment(expenseData.amount),
+        updatedAt: timestamp,
+      });
+
+      const expense: GroupExpense = {
+        id: docRef.id,
+        ...expenseDoc,
+      };
+
+      console.log('Expense created successfully:', expense.id);
+      return expense;
+    } catch (error: any) {
+      console.error('Error creating expense:', error);
+      if (error.code === 'firestore/permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
+      throw new Error(error.message || 'Failed to create expense');
+    }
+  }
+
+  /**
+   * Get all expenses for a group
+   */
+  async getGroupExpenses(groupId: string): Promise<GroupExpense[]> {
+    try {
+      console.log('Getting expenses for group:', groupId);
+      
+      if (!groupId) {
+        console.error('No groupId provided');
+        return [];
+      }
+      
+      let snapshot;
+      try {
+        // Try with orderBy first
+        snapshot = await this._groupsCollection
+          .doc(groupId)
+          .collection('expenses')
+          .where('isActive', '==', true)
+          .orderBy('createdAt', 'desc')
+          .get();
+      } catch (indexError: any) {
+        console.log('OrderBy index not available, trying without orderBy...');
+        // Fallback: try without orderBy
+        try {
+          snapshot = await this._groupsCollection
+            .doc(groupId)
+            .collection('expenses')
+            .where('isActive', '==', true)
+            .get();
+        } catch (whereError: any) {
+          console.log('Where clause failed, trying simple query...');
+          // Final fallback: get all expenses and filter client-side
+          snapshot = await this._groupsCollection
+            .doc(groupId)
+            .collection('expenses')
+            .get();
+        }
+      }
+
+      const expenses: GroupExpense[] = [];
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Filter out inactive expenses if we couldn't use where clause
+        if (data.isActive !== false) {
+          expenses.push({
+            id: doc.id,
+            ...data,
+          } as GroupExpense);
+        }
+      });
+
+      // Sort on client side if we couldn't use orderBy
+      expenses.sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        return bTime - aTime; // desc order
+      });
+
+      console.log(`Found ${expenses.length} expenses for group:`, groupId);
+      console.log('Expenses data:', expenses);
+      return expenses;
+    } catch (error: any) {
+      console.error('Error getting group expenses:', error);
+      console.error('Error details:', error.message, error.code);
+      // Return empty array instead of throwing to prevent app crashes
+      return [];
+    }
+  }
+
+  /**
+   * Update an expense
+   */
+  async updateExpense(groupId: string, expenseId: string, updateData: Partial<GroupExpense>): Promise<GroupExpense> {
+    try {
+      const updateTimestamp = new Date().toISOString();
+      await this._groupsCollection
+        .doc(groupId)
+        .collection('expenses')
+        .doc(expenseId)
+        .update({
+          ...updateData,
+          updatedAt: updateTimestamp,
+        });
+
+      console.log('Expense updated successfully:', expenseId);
+
+      // Return updated expense
+      const expenseDoc = await this._groupsCollection
+        .doc(groupId)
+        .collection('expenses')
+        .doc(expenseId)
+        .get();
+
+      if (!expenseDoc.exists) {
+        throw new Error('Expense not found after update');
+      }
+
+      return {
+        id: expenseDoc.id,
+        ...expenseDoc.data(),
+      } as GroupExpense;
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      throw new Error('Failed to update expense');
+    }
+  }
+
+  /**
+   * Delete/deactivate an expense
+   */
+  async deleteExpense(groupId: string, expenseId: string): Promise<void> {
+    try {
+      // Get expense data first to update group total
+      const expenseDoc = await this._groupsCollection
+        .doc(groupId)
+        .collection('expenses')
+        .doc(expenseId)
+        .get();
+
+      if (!expenseDoc.exists) {
+        throw new Error('Expense not found');
+      }
+
+      const expenseData = expenseDoc.data() as GroupExpense;
+      const timestamp = new Date().toISOString();
+
+      // Deactivate expense
+      await this._groupsCollection
+        .doc(groupId)
+        .collection('expenses')
+        .doc(expenseId)
+        .update({
+          isActive: false,
+          updatedAt: timestamp,
+        });
+      
+      // Update group's total expenses
+      await this._groupsCollection.doc(groupId).update({
+        totalExpenses: firestore.FieldValue.increment(-expenseData.amount),
+        updatedAt: timestamp,
+      });
+
+      console.log('Expense deactivated successfully:', expenseId);
+    } catch (error) {
+      console.error('Error deactivating expense:', error);
+      throw new Error('Failed to deactivate expense');
+    }
+  }
+
+  /**
+   * Calculate balances for a group
+   */
+  async calculateGroupBalances(groupId: string): Promise<Map<string, Map<string, number>>> {
+    try {
+      const expenses = await this.getGroupExpenses(groupId);
+      const balances = new Map<string, Map<string, number>>();
+
+      // Initialize balances for all members
+      const group = await this.getGroupById(groupId);
+      if (!group) throw new Error('Group not found');
+
+      group.members.forEach(member => {
+        balances.set(member.userId, new Map());
+      });
+
+      // Process each expense
+      expenses.forEach(expense => {
+        const payerId = expense.paidBy.id;
+        
+        expense.participants.forEach(participant => {
+          if (participant.id !== payerId) {
+            // Participant owes payer
+            const currentBalance = balances.get(participant.id)?.get(payerId) || 0;
+            balances.get(participant.id)?.set(payerId, currentBalance + participant.amount);
+          }
+        });
+      });
+
+      return balances;
+    } catch (error) {
+      console.error('Error calculating balances:', error);
+      throw new Error('Failed to calculate balances');
+    }
+  }
+
+  // Settlement Management
+  async createSettlement(settlement: Omit<Settlement, 'id'>): Promise<Settlement> {
+    try {
+      console.log('Creating settlement:', settlement);
+      const timestamp = new Date().toISOString();
+      const settlementData = {
+        ...settlement,
+        status: 'pending' as const,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        paidAt: timestamp, // When user clicks "Settle", they're claiming they paid
+      };
+
+      const docRef = await this._groupsCollection
+        .doc(settlement.groupId)
+        .collection('settlements')
+        .add(settlementData);
+
+      const createdSettlement: Settlement = {
+        ...settlementData,
+        id: docRef.id,
+      };
+
+      console.log('Settlement created successfully:', docRef.id);
+      return createdSettlement;
+    } catch (error) {
+      console.error('Error creating settlement:', error);
+      throw new Error('Failed to create settlement');
+    }
+  }
+
+  async getGroupSettlements(groupId: string): Promise<Settlement[]> {
+    try {
+      const snapshot = await this._groupsCollection
+        .doc(groupId)
+        .collection('settlements')
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const settlements = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as Settlement));
+
+      return settlements;
+    } catch (error) {
+      console.error('Error fetching settlements:', error);
+      throw new Error('Failed to fetch settlements');
+    }
+  }
+
+  async confirmSettlement(groupId: string, settlementId: string): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      
+      await this._groupsCollection
+        .doc(groupId)
+        .collection('settlements')
+        .doc(settlementId)
+        .update({
+          status: 'paid',
+          confirmedAt: timestamp,
+          updatedAt: timestamp,
+        });
+
+      console.log('Settlement confirmed successfully:', settlementId);
+    } catch (error) {
+      console.error('Error confirming settlement:', error);
+      throw new Error('Failed to confirm settlement');
+    }
+  }
+
+  async getActiveSettlementsForUser(groupId: string, userId: string): Promise<Settlement[]> {
+    try {
+      // Get settlements where user needs to pay
+      const payerSnapshot = await this._groupsCollection
+        .doc(groupId)
+        .collection('settlements')
+        .where('fromUserId', '==', userId)
+        .where('status', 'in', ['unpaid', 'pending'])
+        .get();
+
+      // Get settlements where user needs to confirm receipt
+      const receiverSnapshot = await this._groupsCollection
+        .doc(groupId)
+        .collection('settlements')
+        .where('toUserId', '==', userId)
+        .where('status', '==', 'pending')
+        .get();
+
+      const settlements = [
+        ...payerSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        } as Settlement)),
+        ...receiverSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        } as Settlement)),
+      ];
+
+      return settlements;
+    } catch (error) {
+      console.error('Error fetching active settlements:', error);
+      throw new Error('Failed to fetch active settlements');
     }
   }
 }

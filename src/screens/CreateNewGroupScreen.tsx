@@ -13,6 +13,7 @@ import {
   AppState,
   AppStateStatus,
   Share,
+  Animated,
 } from 'react-native';
 import { launchImageLibrary, ImageLibraryOptions, Asset } from 'react-native-image-picker';
 import { request, check, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
@@ -22,6 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { firebaseService, CreateGroup } from '../services/firebaseService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ensureDataUri } from '../utils/imageUtils';
 
 interface GroupData {
   name: string;
@@ -63,6 +65,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const permissionCheckRef = useRef<boolean>(false);
+  const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Only check permissions once on mount
@@ -71,6 +74,28 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       checkContactsPermission();
     }
   }, []); // Remove dependencies to prevent re-runs
+
+  // Shimmer animation effect
+  useEffect(() => {
+    if (contactsLoading) {
+      const shimmer = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnimation, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmer.start();
+      return () => shimmer.stop();
+    }
+  }, [contactsLoading, shimmerAnimation]);
 
   useEffect(() => {
     // Listen for app state changes to re-check permissions when returning from settings
@@ -239,9 +264,8 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           const contacts = await Contacts.getAll();
           console.log(`HandleRequestContacts - Fetched ${contacts.length} contacts`);
 
-          // Process contacts in background for faster UI response
-          setContactsLoading(false); // Stop loading immediately
-          filterContactsByFirebaseUsers(contacts);
+          // Process contacts with registration status together
+          await processContactsWithRegistration(contacts);
         } catch (contactError: any) {
           console.error('HandleRequestContacts - Error fetching contacts:', contactError);
           Alert.alert('Error', 'Failed to load contacts. Please try again.');
@@ -299,16 +323,15 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     // Remove all non-digit characters
     let cleaned = phoneNumber.replace(/\D/g, '');
     
-    // Handle Indian phone numbers
-    if (cleaned.length === 10 && !cleaned.startsWith('91')) {
-      cleaned = '91' + cleaned;
+    // Handle Indian phone numbers - normalize to 10-digit format without country code
+    if (cleaned.startsWith('91') && cleaned.length === 12) {
+      // Remove country code 91
+      cleaned = cleaned.substring(2);
     } else if (cleaned.startsWith('0') && cleaned.length === 11) {
-      // Remove leading 0 and add 91
-      cleaned = '91' + cleaned.substring(1);
-    } else if (cleaned.startsWith('+91')) {
-      cleaned = cleaned.substring(3);
-    } else if (cleaned.startsWith('91') && cleaned.length === 12) {
-      // Already in correct format
+      // Remove leading 0
+      cleaned = cleaned.substring(1);
+    } else if (cleaned.length === 10) {
+      // Already in correct 10-digit format
     }
     
     return cleaned;
@@ -317,14 +340,15 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const loadContacts = async () => {
     setContactsLoading(true);
     try {
-      console.log('Loading contacts from device...');
+      console.log('Loading contacts and registration status simultaneously...');
+      
+      // Get contacts from device
       const contactsList = await Contacts.getAll();
       console.log(`Fetched ${contactsList.length} contacts`);
 
-      // Process contacts immediately in background
-      filterContactsByFirebaseUsers(contactsList);
+      // Process contacts and get Firebase data simultaneously
+      await processContactsWithRegistration(contactsList);
       
-      // Stop loading immediately after getting contacts
       setContactsLoading(false);
     } catch (error) {
       console.error('Error loading contacts:', error);
@@ -333,91 +357,96 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     }
   };
 
-  const filterContactsByFirebaseUsers = async (contactsList: Contact[]) => {
+  const processContactsWithRegistration = async (contactsList: Contact[]) => {
     try {
-      console.log('Processing contacts...');
-      
-      // First, quickly process all contacts and show them immediately
-      const quickFiltered: FilteredContact[] = [];
+      // Process all contacts first
+      const allContacts: FilteredContact[] = [];
       const phoneNumbers: string[] = [];
-      const contactPhoneMap: { [key: string]: Contact } = {};
       const processedContactIds = new Set<string>();
 
-      // Quick pass - show all contacts immediately as unregistered
       contactsList.forEach(contact => {
-        if (contact.phoneNumbers && contact.phoneNumbers.length > 0 && !processedContactIds.has(contact.recordID)) {
+        if (contact.phoneNumbers?.length > 0 && !processedContactIds.has(contact.recordID)) {
           processedContactIds.add(contact.recordID);
           
           const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          if (primaryPhone.length >= 10) {
+          
+          if (primaryPhone.length === 10) {
             phoneNumbers.push(primaryPhone);
-            contactPhoneMap[primaryPhone] = contact;
-            
-            quickFiltered.push({
+            allContacts.push({
               ...contact,
-              isRegistered: false, // Start with false, will update later
+              isRegistered: false,
               userProfile: undefined,
             });
           }
         }
       });
 
-      // Show contacts immediately
-      console.log(`Showing ${quickFiltered.length} contacts immediately`);
-      setFilteredContacts(quickFiltered);
-
-      // Background Firebase check - only if we have phone numbers to check
       if (phoneNumbers.length > 0) {
-        console.log(`Checking registration status for ${phoneNumbers.length} contacts...`);
+        // Get registered users from Firebase
+        console.log(`Checking registration for ${phoneNumbers.length} contacts...`);
+        const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
         
-        // Batch process in smaller chunks for better performance
-        const BATCH_SIZE = 50;
         const registeredPhones = new Set<string>();
         const userProfileMap: { [key: string]: any } = {};
+        
+        // Process registered users
+        registeredUsers.forEach(userProfile => {
+          registeredPhones.add(userProfile.phoneNumber);
+          userProfileMap[userProfile.phoneNumber] = userProfile;
+        });
 
-        for (let i = 0; i < phoneNumbers.length; i += BATCH_SIZE) {
-          const batch = phoneNumbers.slice(i, i + BATCH_SIZE);
-          
-          try {
-            const existingPhoneNumbers = await firebaseService.getExistingPhoneNumbers(batch);
-            const registeredUsers = await firebaseService.getUsersByPhoneNumbers(existingPhoneNumbers);
+        // Update all contacts with registration status
+        const finalContacts = allContacts
+          .map(contact => {
+            const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+            const isRegistered = registeredPhones.has(primaryPhone);
             
-            // Add to our sets
-            existingPhoneNumbers.forEach(phone => registeredPhones.add(phone));
-            registeredUsers.forEach(userProfile => {
-              userProfileMap[userProfile.phoneNumber] = userProfile;
-            });
-          } catch (batchError) {
-            console.error(`Error processing batch ${i}-${i + BATCH_SIZE}:`, batchError);
-            // Continue with next batch even if this one fails
-          }
-        }
+            // Skip current user
+            if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
+              return null;
+            }
 
-        // Update contacts with registration status
-        const updatedContacts = quickFiltered.map(contact => {
-          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          const isRegistered = registeredPhones.has(primaryPhone);
-          
-          // Skip current user
-          if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
-            return null;
-          }
+            return {
+              ...contact,
+              isRegistered,
+              userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
+            };
+          })
+          .filter(Boolean) as FilteredContact[];
 
-          return {
-            ...contact,
-            isRegistered,
-            userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
-          };
-        }).filter(Boolean) as FilteredContact[];
+        // Sort: registered first, then unregistered
+        const sortedContacts = finalContacts.sort((a, b) => {
+          if (a.isRegistered && !b.isRegistered) return -1;
+          if (!a.isRegistered && b.isRegistered) return 1;
+          return 0;
+        });
 
-        console.log(`Updated ${updatedContacts.length} contacts with registration status`);
-        setFilteredContacts(updatedContacts);
+        console.log(`Showing ${sortedContacts.length} contacts with registration status`);
+        setFilteredContacts(sortedContacts);
+      } else {
+        // No valid phone numbers, show all contacts
+        setFilteredContacts(allContacts);
       }
     } catch (error) {
-      console.error('Error processing contacts:', error);
-      setFilteredContacts([]);
+      console.error('Error processing contacts with registration:', error);
+      // Show contacts without registration status as fallback
+      const basicContacts: FilteredContact[] = [];
+      contactsList.forEach(contact => {
+        if (contact.phoneNumbers?.length > 0) {
+          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+          if (primaryPhone.length === 10) {
+            basicContacts.push({
+              ...contact,
+              isRegistered: false,
+              userProfile: undefined,
+            });
+          }
+        }
+      });
+      setFilteredContacts(basicContacts);
     }
   };
+
 
 
   const handleInputChange = (field: keyof GroupData, value: string) => {
@@ -602,12 +631,12 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Cover Image Upload */}
         <View style={styles.coverImageSection}>
           <TouchableOpacity style={styles.coverImageContainer} onPress={openImagePicker}>
-            {groupData.coverImage ? (
-              <Image source={{ uri: groupData.coverImage }} style={styles.coverImage} />
+            {groupData.coverImageBase64 ? (
+              <Image source={{ uri: ensureDataUri(groupData.coverImageBase64) || '' }} style={styles.coverImage} />
             ) : (
               <>
                 <View style={styles.uploadIcon}>
@@ -680,17 +709,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
             </View>
           )}
 
-          {/* Debug: Current permission state */}
-          {__DEV__ && (
-            <View style={{marginBottom: 10}}>
-              <Text style={{color: 'red', fontSize: 12, textAlign: 'center'}}>
-                DEBUG: Status={permissionState.status}, Initialized={permissionState.initialized.toString()}, HasRequested={permissionState.hasRequested.toString()}
-              </Text>
-              <Text style={{color: 'blue', fontSize: 12, textAlign: 'center'}}>
-                Total: {filteredContacts.length}, Filtered: {searchFilteredContacts.length}, Query: "{searchQuery}"
-              </Text>
-            </View>
-          )}
 
           {permissionState.status === 'checking' && !permissionState.initialized ? (
             <View style={styles.loadingContainer}>
@@ -700,9 +718,58 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           ) : permissionState.status === 'granted' ? (
             // Permission granted - show contacts or loading
             contactsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primaryButton} />
-                <Text style={styles.loadingText}>Loading contacts...</Text>
+              // Skeleton loader for contacts
+              <View>
+                {[...Array(8)].map((_, index) => (
+                  <View key={index} style={styles.skeletonContactItem}>
+                    <Animated.View 
+                      style={[
+                        styles.skeletonAvatar,
+                        {
+                          opacity: shimmerAnimation.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.3, 0.7],
+                          }),
+                        },
+                      ]} 
+                    />
+                    <View style={styles.skeletonContent}>
+                      <Animated.View 
+                        style={[
+                          styles.skeletonName,
+                          {
+                            opacity: shimmerAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.3, 0.7],
+                            }),
+                          },
+                        ]} 
+                      />
+                      <Animated.View 
+                        style={[
+                          styles.skeletonPhone,
+                          {
+                            opacity: shimmerAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.3, 0.7],
+                            }),
+                          },
+                        ]} 
+                      />
+                    </View>
+                    <Animated.View 
+                      style={[
+                        styles.skeletonButton,
+                        {
+                          opacity: shimmerAnimation.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.3, 0.7],
+                          }),
+                        },
+                      ]} 
+                    />
+                  </View>
+                ))}
               </View>
             ) : searchFilteredContacts.length === 0 ? (
               <View style={styles.emptyContainer}>
@@ -721,22 +788,9 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
               searchFilteredContacts.map(contact => (
                 <View key={contact.recordID} style={styles.contactItem}>
                   <View style={styles.contactInfo}>
-                    <View style={styles.contactHeader}>
-                      <Text style={styles.contactName}>
-                        {contact.userProfile?.name || contact.displayName}
-                      </Text>
-                      <View style={[
-                        styles.statusTag,
-                        contact.isRegistered ? styles.registeredTag : styles.unregisteredTag
-                      ]}>
-                        <Text style={[
-                          styles.statusTagText,
-                          contact.isRegistered ? styles.registeredTagText : styles.unregisteredTagText
-                        ]}>
-                          {contact.isRegistered ? 'Registered' : 'Invite'}
-                        </Text>
-                      </View>
-                    </View>
+                    <Text style={styles.contactName}>
+                      {contact.userProfile?.name || contact.displayName}
+                    </Text>
                     {contact.phoneNumbers && contact.phoneNumbers[0] && (
                       <Text style={styles.contactPhone}>
                         {contact.phoneNumbers[0].number}
@@ -835,14 +889,15 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           )}
         </View>
 
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={loading}>
-          {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveButtonText}>Save</Text>}
-        </TouchableOpacity>
       </ScrollView>
+      
+      {/* Fixed Save Button */}
+      <TouchableOpacity
+        style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+        onPress={handleSave}
+        disabled={loading}>
+        {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveButtonText}>Create Group</Text>}
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -850,6 +905,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: { paddingBottom: 100 }, // Add padding to prevent content from being hidden behind fixed button
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -928,44 +984,15 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     contactInfo: {
       flex: 1,
     },
-    contactHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 4,
-    },
     contactName: { 
       fontSize: 16, 
       fontWeight: '600', 
       color: colors.primaryText,
-      flex: 1,
+      marginBottom: 4,
     },
     contactPhone: {
       fontSize: 14,
       color: colors.secondaryText,
-      marginTop: 2,
-    },
-    statusTag: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-      marginLeft: 8,
-    },
-    registeredTag: {
-      backgroundColor: colors.success + '20',
-    },
-    unregisteredTag: {
-      backgroundColor: colors.primaryButton + '20',
-    },
-    statusTagText: {
-      fontSize: 12,
-      fontWeight: '500',
-    },
-    registeredTagText: {
-      color: colors.success,
-    },
-    unregisteredTagText: {
-      color: colors.primaryButton,
     },
     contactActions: {
       marginLeft: 12,
@@ -1062,15 +1089,63 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       textAlign: 'center',
     },
     saveButton: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
       backgroundColor: colors.primaryButton,
       marginHorizontal: 16,
-      marginVertical: 24,
+      marginBottom: 34, // Safe area padding for bottom
       paddingVertical: 16,
       borderRadius: 8,
       alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 8,
     },
     saveButtonText: { color: colors.primaryButtonText, fontSize: 16, fontWeight: '600' },
     saveButtonDisabled: { opacity: 0.6 },
     permissionText: { textAlign: 'center', color: colors.secondaryText, marginTop: 16 },
     noContactsText: { textAlign: 'center', color: colors.secondaryText, marginTop: 16 },
+    // Skeleton loader styles
+    skeletonContactItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.cardBackground,
+    },
+    skeletonAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.cardBackground,
+      marginRight: 12,
+    },
+    skeletonContent: {
+      flex: 1,
+    },
+    skeletonName: {
+      height: 16,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 4,
+      marginBottom: 8,
+      width: '70%',
+    },
+    skeletonPhone: {
+      height: 14,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 4,
+      width: '50%',
+    },
+    skeletonButton: {
+      width: 70,
+      height: 32,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      marginLeft: 12,
+    },
   });

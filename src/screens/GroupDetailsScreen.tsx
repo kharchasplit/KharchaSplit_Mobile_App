@@ -1,146 +1,578 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  Alert,
+  useWindowDimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-type Member = {
-  userId: string;
-  name: string;
-  email?: string;
-  avatar?: string;
-  isAdmin?: boolean;
-  isCreator?: boolean;
-  role?: string;
-};
-
-type Group = {
-  id: string;
-  name: string;
-  description?: string;
-  coverImageUrl?: string;
-  avatar?: string;
-  createdAt?: any;
-  createdBy?: string;
-  adminIds?: string[];
-  totalExpenses?: number;
-};
+import { firebaseService, Group, GroupMember, GroupExpense } from '../services/firebaseService';
+import { useAuth } from '../context/AuthContext';
+import { typography } from '../utils/typography';
 
 type Props = {
   route: { params: { group: Group } };
   navigation: any;
 };
 
+interface Balance {
+  userId: string;
+  name: string;
+  totalOwed: number;
+  totalOwes: number;
+  netBalance: number;
+  details: Array<{
+    toUserId: string;
+    toUserName: string;
+    amount: number;
+  }>;
+}
+
+interface Settlement {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  amount: number;
+  firebaseSettlement?: {
+    id: string;
+    status: 'unpaid' | 'pending' | 'paid';
+    createdAt: string;
+    paidAt?: string;
+  };
+}
+
 export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
   const { colors } = useTheme();
-  const { group } = route.params || {};
-  const [groupMembers, setGroupMembers] = useState<Member[]>([]);
-  const [adminUsers, setAdminUsers] = useState<Member[]>([]);
+  const { user } = useAuth();
+  const { group: initialGroup } = route.params || {};
+  
+  console.log('Current user:', user);
+  
+  // Responsive setup
+  const { width: screenWidth } = useWindowDimensions();
+  const baseWidth = 375;
+  const scale = (size: number) => (screenWidth / baseWidth) * size;
+  
+  const scaledFontSize = {
+    xs: scale(typography.fontSize.xs),
+    sm: scale(typography.fontSize.sm),
+    base: scale(typography.fontSize.base),
+    lg: scale(typography.fontSize.lg),
+    xl: scale(typography.fontSize.xl),
+    '2xl': scale(typography.fontSize['2xl']),
+    header: scale(typography.text.header.fontSize),
+    body: scale(typography.text.body.fontSize),
+    caption: scale(typography.text.caption.fontSize),
+  };
+
+  // State
+  const [activeTab, setActiveTab] = useState<'expenses' | 'balances' | 'settlement'>('expenses');
+  const [group, setGroup] = useState<Group>(initialGroup);
+  const [expenses, setExpenses] = useState<GroupExpense[]>([]);
+  const [balances, setBalances] = useState<Balance[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [firebaseSettlements, setFirebaseSettlements] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadGroupData();
-  }, [group]);
-
-  const loadGroupData = async () => {
-    setLoading(true);
+  const loadGroupData = useCallback(async () => {
+    if (!group?.id) {
+      console.log('No group ID available');
+      return;
+    }
+    
+    console.log('Loading group data for group:', group.id);
+    
     try {
-      // Placeholder for members (replace with API or local data source)
-      const members: Member[] = [
-        { userId: '1', name: 'Alice', email: 'alice@example.com', isAdmin: true },
-        { userId: '2', name: 'Bob', email: 'bob@example.com' },
-      ];
-
-      setGroupMembers(members);
-
-      // Find admins
-      let admins: Member[] = [];
-      if (group.adminIds?.length) {
-        admins = members.filter(
-          (m) => group.adminIds?.includes(m.userId) || m.userId === group.createdBy
-        );
+      setLoading(true);
+      
+      // Load latest group data
+      console.log('Fetching group details...');
+      const updatedGroup = await firebaseService.getGroupById(group.id);
+      if (updatedGroup) {
+        console.log('Updated group data:', updatedGroup);
+        setGroup(updatedGroup);
       }
-      if (!admins.length) {
-        admins = members.filter((m) => m.isAdmin || m.isCreator || m.role === 'admin');
+      
+      // Load expenses
+      console.log('Fetching group expenses...');
+      const groupExpenses = await firebaseService.getGroupExpenses(group.id);
+      console.log('Fetched expenses:', groupExpenses.length, 'expenses');
+      
+      // Direct log of expense details
+      if (groupExpenses.length > 0) {
+        const expense = groupExpenses[0];
+        console.log('=== EXPENSE DETAILS ===');
+        console.log('Amount:', expense.amount);
+        console.log('Paid by:', expense.paidBy);
+        console.log('Split type:', expense.splitType);
+        console.log('Participants:', expense.participants);
+        console.log('======================');
       }
-      if (!admins.length && members.length) {
-        admins = [members[0]]; // fallback
+      
+      setExpenses(groupExpenses);
+      
+      // Calculate balances
+      console.log('Calculating balances...');
+      const members = updatedGroup?.members || group.members;
+      console.log('Members for balance calculation:', members);
+      console.log('Expenses for balance calculation:', groupExpenses);
+      // Log expense details
+      if (groupExpenses.length > 0) {
+        console.log('First expense details:', {
+          amount: groupExpenses[0].amount,
+          paidBy: groupExpenses[0].paidBy,
+          participants: groupExpenses[0].participants,
+          splitType: groupExpenses[0].splitType
+        });
       }
-      setAdminUsers(
-        admins.filter((a, i, self) => i === self.findIndex((x) => x.userId === a.userId))
-      );
+      calculateBalances(groupExpenses, members);
+      console.log('Balances calculated');
+      console.log('Current balances state:', balances);
+      
+      // Load settlement history from Firebase
+      console.log('Fetching settlement history...');
+      const settlementHistory = await firebaseService.getGroupSettlements(group.id);
+      setFirebaseSettlements(settlementHistory);
+      console.log('Fetched settlements:', settlementHistory.length, 'settlements');
+      
     } catch (error) {
-      console.error('Error loading group details:', error);
+      console.error('Error loading group data:', error);
+      Alert.alert('Error', 'Failed to load group data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [group.id, group.members]);
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A';
-    let date: Date;
-    if (timestamp.toDate) {
-      date = timestamp.toDate();
-    } else if (timestamp instanceof Date) {
-      date = timestamp;
-    } else {
-      date = new Date(timestamp);
+  useEffect(() => {
+    loadGroupData();
+  }, [loadGroupData]);
+
+  // Recalculate settlements when firebase settlements change
+  useEffect(() => {
+    console.log('useEffect for settlements - balances:', balances.length, 'fbSettlements:', firebaseSettlements.length);
+    if (balances.length > 0) {
+      calculateSettlements(balances, firebaseSettlements);
     }
+  }, [firebaseSettlements, balances]);
+
+  // Refresh data when screen comes into focus (e.g., returning from AddExpense)
+  useFocusEffect(
+    useCallback(() => {
+      if (!loading) {
+        loadGroupData();
+      }
+    }, [loading, loadGroupData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadGroupData();
+    setRefreshing(false);
+  }, [loadGroupData]);
+
+  const calculateSettlements = useCallback((balances: Balance[], fbSettlements: any[] = []) => {
+    const settlements: Settlement[] = [];
+    
+    console.log('calculateSettlements called with:', {
+      balancesCount: balances.length,
+      fbSettlementsCount: fbSettlements.length,
+      balances: balances.map(b => ({ userId: b.userId, name: b.name, netBalance: b.netBalance }))
+    });
+    
+    console.log('User ID:', user?.id);
+    
+    // Create arrays of creditors and debtors
+    const creditors = balances.filter(b => b.netBalance > 0)
+      .map(b => ({ userId: b.userId, name: b.name, amount: b.netBalance }))
+      .sort((a, b) => b.amount - a.amount);
+    
+    const debtors = balances.filter(b => b.netBalance < 0)
+      .map(b => ({ userId: b.userId, name: b.name, amount: Math.abs(b.netBalance) }))
+      .sort((a, b) => b.amount - a.amount);
+      
+    console.log('Creditors:', creditors);
+    console.log('Debtors:', debtors);
+    
+    // Greedy algorithm to minimize transactions
+    let i = 0, j = 0;
+    
+    while (i < creditors.length && j < debtors.length) {
+      const creditor = creditors[i];
+      const debtor = debtors[j];
+      
+      const settleAmount = Math.min(creditor.amount, debtor.amount);
+      
+      if (settleAmount > 0.01) { // Ignore tiny amounts
+        // Check if there's an existing Firebase settlement for this pair
+        const existingSettlement = fbSettlements.find(s => 
+          s.fromUserId === debtor.userId && s.toUserId === creditor.userId && 
+          Math.abs(s.amount - settleAmount) < 0.01
+        );
+        
+        settlements.push({
+          from: debtor.userId,
+          fromName: debtor.name,
+          to: creditor.userId,
+          toName: creditor.name,
+          amount: settleAmount,
+          firebaseSettlement: existingSettlement ? {
+            id: existingSettlement.id,
+            status: existingSettlement.status,
+            createdAt: existingSettlement.createdAt,
+            paidAt: existingSettlement.paidAt
+          } : undefined
+        });
+      }
+      
+      creditor.amount -= settleAmount;
+      debtor.amount -= settleAmount;
+      
+      if (creditor.amount < 0.01) i++;
+      if (debtor.amount < 0.01) j++;
+    }
+    
+    console.log('Final settlements:', settlements);
+    setSettlements(settlements);
+  }, [user?.id]);
+
+  const calculateBalances = useCallback((expenses: GroupExpense[], members: GroupMember[]) => {
+    console.log('calculateBalances called with:', expenses.length, 'expenses and', members.length, 'members');
+    
+    // Initialize balance tracking
+    const balanceMap = new Map<string, Balance>();
+    const owesMap = new Map<string, Map<string, number>>();
+    
+    // Initialize for all members
+    members.forEach(member => {
+      balanceMap.set(member.userId, {
+        userId: member.userId,
+        name: member.name,
+        totalOwed: 0,
+        totalOwes: 0,
+        netBalance: 0,
+        details: []
+      });
+      owesMap.set(member.userId, new Map());
+    });
+
+    // Process each expense
+    expenses.forEach(expense => {
+      const payerId = expense.paidBy.id;
+      
+      expense.participants.forEach(participant => {
+        if (participant.id !== payerId) {
+          // Update what participant owes to payer
+          const currentOwes = owesMap.get(participant.id)?.get(payerId) || 0;
+          owesMap.get(participant.id)?.set(payerId, currentOwes + participant.amount);
+          
+          // Update balances
+          const participantBalance = balanceMap.get(participant.id);
+          const payerBalance = balanceMap.get(payerId);
+          
+          if (participantBalance) {
+            participantBalance.totalOwes += participant.amount;
+          }
+          if (payerBalance) {
+            payerBalance.totalOwed += participant.amount;
+          }
+        }
+      });
+    });
+
+    // Calculate net balances and simplify debts
+    const calculatedBalances: Balance[] = [];
+    
+    members.forEach(member => {
+      const balance = balanceMap.get(member.userId);
+      if (balance) {
+        balance.netBalance = balance.totalOwed - balance.totalOwes;
+        
+        // Add details of who owes whom
+        const owesDetails = owesMap.get(member.userId);
+        if (owesDetails) {
+          owesDetails.forEach((amount, toUserId) => {
+            const toUser = members.find(m => m.userId === toUserId);
+            if (toUser && amount > 0) {
+              balance.details.push({
+                toUserId,
+                toUserName: toUser.name,
+                amount
+              });
+            }
+          });
+        }
+        
+        calculatedBalances.push(balance);
+      }
+    });
+    
+    console.log('Setting balances:', calculatedBalances);
+    setBalances(calculatedBalances);
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
+      year: 'numeric'
     });
   };
 
-  const styles = createStyles(colors);
+  const handleSettlePayment = async (settlement: Settlement) => {
+    try {
+      await firebaseService.createSettlement({
+        groupId: group.id,
+        fromUserId: settlement.from,
+        fromUserName: settlement.fromName,
+        toUserId: settlement.to,
+        toUserName: settlement.toName,
+        amount: settlement.amount,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      Alert.alert('Success', 'Payment marked as pending. Waiting for confirmation from receiver.');
+      await loadGroupData();
+    } catch (error) {
+      console.error('Error creating settlement:', error);
+      Alert.alert('Error', 'Failed to mark payment as done');
+    }
+  };
 
-  const renderMemberItem = (member: Member, isAdmin = false) => (
-    <View key={member.userId} style={styles.memberItem}>
-      {member.avatar ? (
-        <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
-      ) : (
-        <View style={styles.memberAvatarPlaceholder}>
-          <Text style={styles.memberAvatarText}>
-            {member.name?.charAt(0).toUpperCase() || 'U'}
+  const handleConfirmPayment = async (settlement: Settlement) => {
+    if (!settlement.firebaseSettlement?.id) return;
+    
+    try {
+      await firebaseService.confirmSettlement(group.id, settlement.firebaseSettlement.id);
+      Alert.alert('Success', 'Payment confirmed successfully!');
+      await loadGroupData();
+    } catch (error) {
+      console.error('Error confirming settlement:', error);
+      Alert.alert('Error', 'Failed to confirm payment');
+    }
+  };
+
+  const handleAddExpense = () => {
+    navigation.navigate('AddExpense', { 
+      group: { id: group.id, name: group.name },
+      onReturn: () => {
+        // This will trigger when returning from AddExpense
+        loadGroupData();
+      }
+    });
+  };
+
+  const handleExpensePress = (expense: GroupExpense) => {
+    // Navigate to ExpenseDetailScreen for better user experience
+    navigation.navigate('ExpenseDetail', { 
+      expense, 
+      group 
+    });
+  };
+
+
+  const renderExpenseItem = ({ item }: { item: GroupExpense }) => {
+    const isCurrentUserPayer = item.paidBy.id === user?.id;
+    const currentUserParticipant = item.participants.find(p => p.id === user?.id);
+    const currentUserAmount = currentUserParticipant?.amount || 0;
+    
+    return (
+      <TouchableOpacity style={styles.expenseItem} onPress={() => handleExpensePress(item)}>
+        <View style={styles.expenseLeft}>
+          <View style={[styles.categoryIcon, { backgroundColor: item.category.color }]}>
+            <Text style={styles.categoryEmoji}>{item.category.emoji}</Text>
+          </View>
+          <View style={styles.expenseDetails}>
+            <Text style={styles.expenseDescription}>{item.description}</Text>
+            <Text style={styles.expenseInfo}>
+              Paid by {isCurrentUserPayer ? 'You' : item.paidBy.name}
+            </Text>
+            <Text style={styles.expenseDate}>{formatDate(item.createdAt)}</Text>
+          </View>
+        </View>
+        <View style={styles.expenseRight}>
+          <Text style={styles.expenseAmount}>₹{item.amount.toFixed(2)}</Text>
+          {!isCurrentUserPayer && currentUserAmount > 0 && (
+            <Text style={styles.youOwe}>you owe ₹{currentUserAmount.toFixed(2)}</Text>
+          )}
+          {isCurrentUserPayer && currentUserAmount < item.amount && (
+            <Text style={styles.youLent}>
+              you lent ₹{(item.amount - currentUserAmount).toFixed(2)}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderBalanceItem = ({ item }: { item: Balance }) => {
+    const isCurrentUser = item.userId === user?.id;
+    const colorStyle = item.netBalance > 0 ? styles.positiveAmount : 
+                       item.netBalance < 0 ? styles.negativeAmount : 
+                       styles.neutralAmount;
+    
+    return (
+      <View style={styles.balanceItem}>
+        <View style={styles.balanceHeader}>
+          <Text style={styles.balanceName}>
+            {isCurrentUser ? 'You' : item.name}
+          </Text>
+          <Text style={[styles.balanceAmount, colorStyle]}>
+            {item.netBalance > 0 ? '+' : ''}₹{Math.abs(item.netBalance).toFixed(2)}
           </Text>
         </View>
-      )}
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName}>{member.name}</Text>
-        <Text style={styles.memberEmail}>{member.email || 'No email'}</Text>
+        {item.netBalance !== 0 && (
+          <Text style={styles.balanceSubtext}>
+            {item.netBalance > 0 
+              ? `Gets back ₹${item.netBalance.toFixed(2)}` 
+              : `Owes ₹${Math.abs(item.netBalance).toFixed(2)}`}
+          </Text>
+        )}
+        {item.details.length > 0 && (
+          <View style={styles.balanceDetails}>
+            {item.details.map((detail, index) => (
+              <Text key={index} style={styles.balanceDetailText}>
+                owes ₹{detail.amount.toFixed(2)} to {detail.toUserName}
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
-      {isAdmin && (
-        <View style={styles.adminBadge}>
-          <MaterialIcons name="admin-panel-settings" size={16} color={colors.activeIcon} />
-          <Text style={styles.adminText}>Admin</Text>
-        </View>
-      )}
-    </View>
-  );
+    );
+  };
 
-  if (loading) {
+  const renderSettlementItem = ({ item }: { item: Settlement }) => {
+    const isCurrentUserFrom = item.from === user?.id;
+    const isCurrentUserTo = item.to === user?.id;
+    const settlementStatus = item.firebaseSettlement?.status;
+    
+    console.log('Rendering settlement:', {
+      from: item.from,
+      to: item.to,
+      amount: item.amount,
+      isCurrentUserFrom,
+      isCurrentUserTo,
+      settlementStatus,
+      currentUserId: user?.id
+    });
+    
+    return (
+      <View style={styles.settlementItem}>
+        <View style={styles.settlementContent}>
+          <View style={styles.settlementLeft}>
+            <Ionicons 
+              name="arrow-forward-circle-outline" 
+              size={scaledFontSize['2xl']} 
+              color={colors.primaryButton} 
+            />
+            <View style={styles.settlementDetails}>
+              <Text style={styles.settlementText}>
+                <Text style={styles.settlementName}>
+                  {isCurrentUserFrom ? 'You' : item.fromName}
+                </Text>
+                {' pays '}
+                <Text style={styles.settlementName}>
+                  {isCurrentUserTo ? 'You' : item.toName}
+                </Text>
+              </Text>
+              <Text style={styles.settlementAmount}>₹{item.amount.toFixed(2)}</Text>
+              
+              {/* Show status if exists */}
+              {settlementStatus === 'pending' && (
+                <Text style={styles.pendingText}>
+                  {isCurrentUserFrom ? 'Awaiting confirmation' : 'Pending your confirmation'}
+                </Text>
+              )}
+              {settlementStatus === 'paid' && (
+                <View style={styles.paidBadge}>
+                  <Ionicons name="checkmark-circle" size={scale(16)} color={colors.success} />
+                  <Text style={styles.paidText}>Paid</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          
+          {/* Action buttons */}
+          <View style={styles.settlementActions}>
+            {/* Show Settle button for payer if not already settled */}
+            {isCurrentUserFrom && !settlementStatus && (
+              <TouchableOpacity 
+                style={styles.settleButton} 
+                onPress={() => {
+                  Alert.alert(
+                    'Confirm Payment',
+                    `Have you paid ₹${item.amount.toFixed(2)} to ${item.toName}?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Yes', onPress: () => handleSettlePayment(item) }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.settleButtonText}>Settle</Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Show Pending status for payer */}
+            {isCurrentUserFrom && settlementStatus === 'pending' && (
+              <View style={styles.pendingButton}>
+                <Text style={styles.pendingButtonText}>Pending</Text>
+              </View>
+            )}
+            
+            {/* Show Confirm button for receiver */}
+            {isCurrentUserTo && settlementStatus === 'pending' && (
+              <TouchableOpacity 
+                style={styles.confirmButton} 
+                onPress={() => {
+                  Alert.alert(
+                    'Confirm Receipt',
+                    `Have you received ₹${item.amount.toFixed(2)} from ${item.fromName}?`,
+                    [
+                      { text: 'No', style: 'cancel' },
+                      { text: 'Yes', onPress: () => handleConfirmPayment(item) }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+
+  const styles = createStyles(colors, scale, scaledFontSize);
+
+  if (loading && !refreshing) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={scaledFontSize.xl} color={colors.primaryText} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Group Details</Text>
-          <View style={styles.headerRight} />
+          <Text style={styles.headerTitle}>{group.name}</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('ManageGroup', { group })}>
+            <Ionicons name="settings-outline" size={scaledFontSize.xl} color={colors.primaryText} />
+          </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primaryButton} />
-          <Text style={styles.loadingText}>Loading group details...</Text>
         </View>
       </SafeAreaView>
     );
@@ -148,195 +580,451 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={scaledFontSize.xl} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group Details</Text>
-        <View style={styles.headerRight} />
+        <Text style={styles.headerTitle}>{group.name}</Text>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity onPress={() => loadGroupData()}>
+            <Ionicons name="refresh-outline" size={scaledFontSize.xl} color={colors.primaryText} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('ManageGroup', { group })}>
+            <Ionicons name="settings-outline" size={scaledFontSize.xl} color={colors.primaryText} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Group Info */}
-        <View style={styles.section}>
-          <View style={styles.groupHeader}>
-            {group.coverImageUrl ? (
-              <Image source={{ uri: group.coverImageUrl }} style={styles.groupImage} />
-            ) : (
-              <View style={styles.groupImagePlaceholder}>
-                <Text style={styles.groupImageText}>{group.avatar || '🎭'}</Text>
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'expenses' && styles.activeTab]}
+          onPress={() => setActiveTab('expenses')}
+        >
+          <Text style={[styles.tabText, activeTab === 'expenses' && styles.activeTabText]}>
+            Expenses
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'balances' && styles.activeTab]}
+          onPress={() => setActiveTab('balances')}
+        >
+          <Text style={[styles.tabText, activeTab === 'balances' && styles.activeTabText]}>
+            Balances
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'settlement' && styles.activeTab]}
+          onPress={() => setActiveTab('settlement')}
+        >
+          <Text style={[styles.tabText, activeTab === 'settlement' && styles.activeTabText]}>
+            Settlement
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.content}>
+        {activeTab === 'expenses' && (
+          <>
+            <FlatList
+              data={expenses}
+              renderItem={renderExpenseItem}
+              keyExtractor={(item) => item.id || ''}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="receipt-outline" size={scale(64)} color={colors.secondaryText} />
+                  <Text style={styles.emptyText}>No expenses yet</Text>
+                  <Text style={styles.emptySubtext}>Add your first expense to get started</Text>
+                </View>
+              }
+              contentContainerStyle={expenses.length === 0 && styles.emptyList}
+            />
+            <TouchableOpacity style={styles.fab} onPress={handleAddExpense}>
+              <Ionicons name="add" size={scaledFontSize['2xl']} color={colors.primaryButtonText} />
+            </TouchableOpacity>
+          </>
+        )}
+
+        {activeTab === 'balances' && (
+          <FlatList
+            data={balances}
+            renderItem={renderBalanceItem}
+            keyExtractor={(item) => item.userId}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Ionicons name="wallet-outline" size={scale(64)} color={colors.secondaryText} />
+                <Text style={styles.emptyText}>No balances</Text>
+                <Text style={styles.emptySubtext}>Add expenses to see balances</Text>
               </View>
-            )}
-            <View style={styles.groupInfo}>
-              <Text style={styles.groupName}>{group.name}</Text>
-              <Text style={styles.groupDescription}>
-                {group.description || 'No description'}
-              </Text>
-            </View>
-          </View>
-        </View>
+            }
+            contentContainerStyle={balances.length === 0 && styles.emptyList}
+          />
+        )}
 
-        {/* Basic Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Basic Information</Text>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="group" size={20} color={colors.inactiveIcon} />
-            <Text style={styles.infoLabel}>Total Members</Text>
-            <Text style={styles.infoValue}>{groupMembers.length}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="admin-panel-settings" size={20} color={colors.inactiveIcon} />
-            <Text style={styles.infoLabel}>Total Admins</Text>
-            <Text style={styles.infoValue}>{adminUsers.length}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="date-range" size={20} color={colors.inactiveIcon} />
-            <Text style={styles.infoLabel}>Created On</Text>
-            <Text style={styles.infoValue}>{formatDate(group.createdAt)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="currency-rupee" size={20} color={colors.inactiveIcon} />
-            <Text style={styles.infoLabel}>Total Expenses</Text>
-            <Text style={styles.infoValue}>
-              ₹{group.totalExpenses?.toFixed(0) || '0'}
-            </Text>
-          </View>
-        </View>
+        {activeTab === 'settlement' && (
+          <>
+            {console.log('Settlement tab - settlements:', settlements)}
+            {console.log('Settlement tab - balances:', balances)}
+            {/* Test button to create dummy settlement */}
+            <TouchableOpacity 
+              onPress={() => {
+                const testSettlement: Settlement = {
+                  from: user?.id || 'test-from',
+                  fromName: 'You',
+                  to: 'test-user-id',
+                  toName: 'Test User',
+                  amount: 100,
+                  firebaseSettlement: undefined
+                };
+                setSettlements([testSettlement]);
+                console.log('Test settlement created');
+                Alert.alert('Test', 'Settlement created');
+              }}
+              style={{
+                backgroundColor: '#007AFF',
+                padding: scale(15),
+                margin: scale(20),
+                borderRadius: scale(8),
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: scale(16), fontWeight: 'bold' }}>Create Test Settlement</Text>
+            </TouchableOpacity>
+            <FlatList
+              data={settlements}
+              renderItem={renderSettlementItem}
+              keyExtractor={(item, index) => `${item.from}-${item.to}-${index}`}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="checkmark-circle-outline" size={scale(64)} color={colors.secondaryText} />
+                  <Text style={styles.emptyText}>All settled up!</Text>
+                  <Text style={styles.emptySubtext}>No payments needed</Text>
+                </View>
+              }
+              contentContainerStyle={settlements.length === 0 && styles.emptyList}
+            />
+            {/* Debug button - remove later */}
+            <TouchableOpacity 
+              style={{
+                position: 'absolute',
+                bottom: scale(20),
+                right: scale(20),
+                backgroundColor: colors.primaryButton,
+                padding: scale(10),
+                borderRadius: scale(5),
+                elevation: 5,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+              }}
+              onPress={() => {
+                console.log('Debug - Current settlements:', settlements);
+                console.log('Debug - Current balances:', balances);
+                console.log('Debug - Current user:', user);
+              }}
+            >
+              <Text style={{ color: colors.primaryButtonText, fontWeight: 'bold' }}>Debug Log</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
 
-        {/* Admins */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group Admins</Text>
-          {adminUsers.length > 0 ? (
-            adminUsers.map((m) => renderMemberItem(m, true))
-          ) : (
-            <Text style={styles.noDataText}>No admins found</Text>
-          )}
-        </View>
-
-        {/* Members */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>All Members</Text>
-          {groupMembers.length > 0 ? (
-            groupMembers.map((m) => renderMemberItem(m))
-          ) : (
-            <Text style={styles.noDataText}>No members found</Text>
-          )}
-        </View>
-      </ScrollView>
     </SafeAreaView>
   );
 };
 
-// 🎨 Theme-aware styles
-const createStyles = (colors: any) =>
-  StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: colors.cardBackground,
-      borderBottomWidth: 0,
-      borderBottomColor: colors.secondaryText,
-    },
-    backButton: { padding: 8 },
-    headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
-    headerRight: { width: 40 },
-    scrollView: { flex: 1 },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    loadingText: { fontSize: 16, color: colors.secondaryText, marginTop: 16 },
-    section: {
-      backgroundColor: colors.cardBackground,
-      marginVertical: 8,
-      marginHorizontal: 16,
-      borderRadius: 12,
-      padding: 16,
-    },
-    groupHeader: { flexDirection: 'row', alignItems: 'center' },
-    groupImage: { width: 60, height: 60, borderRadius: 30, marginRight: 16 },
-    groupImagePlaceholder: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      backgroundColor: colors.secondaryText,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 16,
-    },
-    groupImageText: { fontSize: 30 },
-    groupInfo: { flex: 1 },
-    groupName: {
-      fontSize: 20,
-      fontWeight: '600',
-      color: colors.primaryText,
-      marginBottom: 4,
-    },
-    groupDescription: { fontSize: 14, color: colors.secondaryText },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primaryText,
-      marginBottom: 16,
-    },
-    infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-    infoLabel: {
-      fontSize: 14,
-      color: colors.secondaryText,
-      marginLeft: 12,
-      flex: 1,
-    },
-    infoValue: { fontSize: 14, fontWeight: '500', color: colors.primaryText },
-    memberItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.secondaryText,
-    },
-    memberAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
-    memberAvatarPlaceholder: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.primaryButton,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 12,
-    },
-    memberAvatarText: {
-      color: colors.primaryButtonText,
-      fontSize: 16,
-      fontWeight: 'bold',
-    },
-    memberInfo: { flex: 1 },
-    memberName: {
-      fontSize: 16,
-      fontWeight: '500',
-      color: colors.primaryText,
-      marginBottom: 2,
-    },
-    memberEmail: { fontSize: 12, color: colors.secondaryText },
-    adminBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.background,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-    },
-    adminText: {
-      fontSize: 12,
-      color: colors.activeIcon,
-      fontWeight: '500',
-      marginLeft: 4,
-    },
-    noDataText: {
-      fontSize: 14,
-      color: colors.secondaryText,
-      textAlign: 'center',
-      paddingVertical: 16,
-    },
-  });
+const createStyles = (colors: any, scale: (size: number) => number, fonts: any) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: scale(16),
+    backgroundColor: colors.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  headerTitle: {
+    fontSize: fonts.header,
+    fontWeight: '600',
+    color: colors.primaryText,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.cardBackground,
+    paddingHorizontal: scale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: scale(12),
+    alignItems: 'center',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primaryButton,
+  },
+  tabText: {
+    fontSize: fonts.body,
+    color: colors.secondaryText,
+  },
+  activeTabText: {
+    color: colors.primaryButton,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: scale(80),
+  },
+  emptyList: {
+    flexGrow: 1,
+  },
+  emptyText: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.primaryText,
+    marginTop: scale(16),
+  },
+  emptySubtext: {
+    fontSize: fonts.body,
+    color: colors.secondaryText,
+    marginTop: scale(8),
+  },
+  
+  // Expense Item Styles
+  expenseItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: scale(16),
+    backgroundColor: colors.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  expenseLeft: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  categoryIcon: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: scale(12),
+  },
+  categoryEmoji: {
+    fontSize: fonts.xl,
+  },
+  expenseDetails: {
+    flex: 1,
+  },
+  expenseDescription: {
+    fontSize: fonts.body,
+    fontWeight: '500',
+    color: colors.primaryText,
+  },
+  expenseInfo: {
+    fontSize: fonts.caption,
+    color: colors.secondaryText,
+    marginTop: scale(2),
+  },
+  expenseDate: {
+    fontSize: fonts.caption,
+    color: colors.secondaryText,
+    marginTop: scale(2),
+  },
+  expenseRight: {
+    alignItems: 'flex-end',
+  },
+  expenseAmount: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.primaryText,
+  },
+  youOwe: {
+    fontSize: fonts.caption,
+    color: colors.error,
+    marginTop: scale(4),
+  },
+  youLent: {
+    fontSize: fonts.caption,
+    color: colors.success,
+    marginTop: scale(4),
+  },
+  
+  // Balance Item Styles
+  balanceItem: {
+    padding: scale(16),
+    backgroundColor: colors.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  balanceName: {
+    fontSize: fonts.body,
+    fontWeight: '600',
+    color: colors.primaryText,
+  },
+  balanceAmount: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+  },
+  positiveAmount: {
+    color: colors.success,
+  },
+  negativeAmount: {
+    color: colors.error,
+  },
+  neutralAmount: {
+    color: colors.secondaryText,
+  },
+  balanceSubtext: {
+    fontSize: fonts.caption,
+    color: colors.secondaryText,
+    marginTop: scale(4),
+  },
+  balanceDetails: {
+    marginTop: scale(8),
+  },
+  balanceDetailText: {
+    fontSize: fonts.caption,
+    color: colors.secondaryText,
+    marginTop: scale(2),
+  },
+  
+  // Settlement Item Styles
+  settlementItem: {
+    padding: scale(16),
+    backgroundColor: colors.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  settlementContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settlementLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  settlementDetails: {
+    marginLeft: scale(12),
+    flex: 1,
+  },
+  settlementText: {
+    fontSize: fonts.body,
+    color: colors.primaryText,
+  },
+  settlementName: {
+    fontWeight: '600',
+  },
+  settlementAmount: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.primaryButton,
+    marginTop: scale(4),
+  },
+  settlementActions: {
+    marginLeft: scale(12),
+  },
+  settleButton: {
+    backgroundColor: colors.primaryButton,
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(8),
+    borderRadius: scale(6),
+  },
+  settleButtonText: {
+    color: colors.primaryButtonText,
+    fontSize: fonts.body,
+    fontWeight: '600',
+  },
+  pendingButton: {
+    backgroundColor: colors.warning + '20', // 20% opacity
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(8),
+    borderRadius: scale(6),
+  },
+  pendingButtonText: {
+    color: colors.warning,
+    fontSize: fonts.body,
+    fontWeight: '600',
+  },
+  confirmButton: {
+    backgroundColor: colors.success,
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(8),
+    borderRadius: scale(6),
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: fonts.body,
+    fontWeight: '600',
+  },
+  pendingText: {
+    fontSize: fonts.caption,
+    color: colors.warning,
+    marginTop: scale(4),
+  },
+  paidBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: scale(4),
+  },
+  paidText: {
+    fontSize: fonts.caption,
+    color: colors.success,
+    marginLeft: scale(4),
+    fontWeight: '500',
+  },
+  
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: scale(16),
+    right: scale(16),
+    width: scale(56),
+    height: scale(56),
+    borderRadius: scale(28),
+    backgroundColor: colors.primaryButton,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    gap: scale(16),
+  },
+});

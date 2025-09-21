@@ -15,6 +15,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary, ImageLibraryOptions } from 'react-native-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { firebaseService, Group as FirebaseGroup, GroupMember } from '../services/firebaseService';
+import { useAuth } from '../context/AuthContext';
+import { ensureDataUri } from '../utils/imageUtils';
 
 // Types
 interface Member {
@@ -40,25 +43,43 @@ interface ManageGroupScreenProps {
 
 export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, navigation }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { group } = route.params || {};
 
+  const [firebaseGroup, setFirebaseGroup] = useState<FirebaseGroup | null>(null);
   const [groupData, setGroupData] = useState({
     name: group?.name || '',
     description: group?.description || '',
-    coverImage: group?.coverImageUrl || null,
+    coverImage: group?.coverImageUrl || group?.coverImageBase64 || null,
   });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [isGroupAdmin, setIsGroupAdmin] = useState(true); // Mocked as true for demo
-  const [groupMembers, setGroupMembers] = useState<Member[]>([]);
+  const [isGroupAdmin, setIsGroupAdmin] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [originalData, setOriginalData] = useState({
+    name: '',
+    description: '',
+    coverImage: null as string | null,
+  });
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     loadGroupData();
   }, [group]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    const hasChanges = 
+      groupData.name !== originalData.name ||
+      groupData.description !== originalData.description ||
+      groupData.coverImage !== originalData.coverImage;
+    
+    setHasUnsavedChanges(hasChanges);
+  }, [groupData, originalData]);
 
   const loadGroupData = async () => {
     if (!group?.id) {
@@ -71,12 +92,33 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
     try {
       console.log('📂 Loading group data for:', group.id);
 
-      // Mocked group members (replace with API call)
-      const members: Member[] = [
-        { userId: '1', name: 'Alice', role: 'admin', joinedAt: { seconds: 1620000000 } },
-        { userId: '2', name: 'Bob', role: 'member', joinedAt: { seconds: 1630000000 } },
-      ];
-      setGroupMembers(members);
+      // Load real Firebase data
+      const groupDetails = await firebaseService.getGroupById(group.id);
+      
+      if (groupDetails) {
+        setFirebaseGroup(groupDetails);
+        const loadedData = {
+          name: groupDetails.name,
+          description: groupDetails.description || '',
+          coverImage: groupDetails.coverImageBase64 
+            ? ensureDataUri(groupDetails.coverImageBase64) 
+            : null,
+        };
+        
+        setGroupData(loadedData);
+        setOriginalData(loadedData);
+        
+        setGroupMembers(groupDetails.members || []);
+        
+        // Check if current user is admin
+        const currentUserMember = groupDetails.members.find(m => m.userId === user?.id);
+        setIsGroupAdmin(
+          groupDetails.createdBy === user?.id || 
+          currentUserMember?.role === 'admin'
+        );
+        
+        console.log(`✅ Loaded ${groupDetails.members.length} members`);
+      }
     } catch (error) {
       console.error('❌ Error loading data:', error);
       Alert.alert('Error', 'Failed to load group data. Please try again.');
@@ -106,45 +148,94 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
   };
 
   const openImagePicker = () => {
-    const options: ImageLibraryOptions = { mediaType: 'photo', quality: 0.8, maxWidth: 1000, maxHeight: 1000 };
+    const options: ImageLibraryOptions = { 
+      mediaType: 'photo', 
+      quality: 0.8, 
+      maxWidth: 1000, 
+      maxHeight: 1000,
+      includeBase64: true 
+    };
     launchImageLibrary(options, response => {
       if (response.assets && response.assets[0]) {
-        uploadCoverImage(response.assets[0].uri ?? '');
+        uploadCoverImage(response.assets[0]);
       }
     });
   };
 
-  const uploadCoverImage = async (imageUri: string) => {
+  const uploadCoverImage = async (asset: any) => {
     setUploadingImage(true);
     try {
-      console.log('🖼️ Uploading cover image for group:', group?.id);
-      // Mock upload URL
-      const imageUrl = imageUri;
-      setGroupData(prev => ({ ...prev, coverImage: imageUrl }));
-      Alert.alert('Success', 'Cover image updated successfully!');
+      console.log('🖼️ Processing cover image for group:', group?.id);
+      
+      if (!asset.base64) {
+        Alert.alert('Error', 'Failed to process image. Please try again.');
+        return;
+      }
+
+      // Check file size (base64 is ~1.33x larger than original)
+      const sizeInBytes = (asset.base64.length * 3) / 4;
+      const sizeInMB = sizeInBytes / (1024 * 1024);
+
+      if (sizeInMB > 5) {
+        Alert.alert('Image Too Large', 'Please select an image smaller than 5MB');
+        return;
+      }
+
+      // Create data URI from base64
+      const mimeType = asset.type || 'image/jpeg';
+      const imageDataUri = `data:${mimeType};base64,${asset.base64}`;
+      
+      setGroupData(prev => ({ ...prev, coverImage: imageDataUri }));
+      console.log('✅ Cover image updated successfully');
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload image.');
+      console.error('Error processing image:', error);
+      Alert.alert('Error', 'Failed to process image. Please try again.');
     } finally {
       setUploadingImage(false);
     }
   };
 
-  const removeCoverImage = async () => {
-    setGroupData(prev => ({ ...prev, coverImage: null }));
-    Alert.alert('Success', 'Cover image removed successfully!');
+  const removeCoverImage = () => {
+    Alert.alert(
+      'Remove Cover Image',
+      'Are you sure you want to remove the group cover image?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setGroupData(prev => ({ ...prev, coverImage: null }));
+            console.log('🗑️ Cover image removed from local state');
+          }
+        }
+      ]
+    );
   };
 
-  const handleRemoveMember = async (member: Member) => {
+  const handleRemoveMember = async (member: GroupMember) => {
     if (!isGroupAdmin) return;
-    if (member.isYou) return;
+    if (member.userId === user?.id) {
+      Alert.alert('Error', 'You cannot remove yourself from the group');
+      return;
+    }
 
-    Alert.alert('Remove Member', `Remove ${member.name}?`, [
+    Alert.alert('Remove Member', `Remove ${member.name} from the group?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setGroupMembers(prev => prev.filter(m => m.userId !== member.userId));
+          if (!group?.id) return;
+          
+          try {
+            await firebaseService.removeGroupMember(group.id, member.userId);
+            setGroupMembers(prev => prev.filter(m => m.userId !== member.userId));
+            Alert.alert('Success', `${member.name} has been removed from the group`);
+          } catch (error) {
+            console.error('Error removing member:', error);
+            Alert.alert('Error', 'Failed to remove member. Please try again.');
+          }
         },
       },
     ]);
@@ -156,12 +247,51 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
       return;
     }
 
+    if (!group?.id) {
+      Alert.alert('Error', 'Group ID not found');
+      return;
+    }
+
     setSaving(true);
     try {
       console.log('💾 Saving group changes:', groupData);
+      
+      // Prepare update data
+      const updateData: any = {
+        name: groupData.name.trim(),
+        description: groupData.description.trim(),
+      };
+
+      // Handle cover image
+      if (groupData.coverImage) {
+        // Extract base64 data from data URI if needed
+        const base64Data = groupData.coverImage.startsWith('data:') 
+          ? groupData.coverImage.split(',')[1] 
+          : groupData.coverImage;
+        updateData.coverImageBase64 = base64Data;
+      } else {
+        // Explicitly set to null to remove image
+        updateData.coverImageBase64 = null;
+      }
+
+      console.log('💾 Updating group with data:', {
+        name: updateData.name,
+        description: updateData.description,
+        hasImage: !!updateData.coverImageBase64
+      });
+
+      // Update group in Firebase
+      await firebaseService.updateGroup(group.id, updateData);
+      
+      // Update original data to reflect saved state
+      setOriginalData(groupData);
+      
       Alert.alert('Success', 'Group updated successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
+    } catch (error) {
+      console.error('Error updating group:', error);
+      Alert.alert('Error', 'Failed to update group. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -184,7 +314,35 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
       borderBottomColor: colors.secondaryText,
     },
     backButton: { padding: 8 },
+    headerTitleContainer: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      flex: 1,
+    },
     headerTitle: { fontSize: 18, fontWeight: '600', color: colors.primaryText },
+    unsavedIndicator: { 
+      marginLeft: 8,
+    },
+    unsavedText: { 
+      fontSize: 24, 
+      color: colors.primaryButton,
+      lineHeight: 24,
+    },
+    headerSaveButton: {
+      backgroundColor: colors.primaryButton,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 6,
+      minWidth: 60,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerSaveButtonText: {
+      color: colors.primaryButtonText,
+      fontSize: 14,
+      fontWeight: '600',
+    },
     placeholder: { width: 40 },
     scrollView: { flex: 1 },
     coverImageSection: { alignItems: 'center', paddingVertical: 24 },
@@ -212,6 +370,18 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
       backgroundColor: colors.inputBackground,
     },
     descriptionInput: { height: 80, textAlignVertical: 'top' },
+    statsSection: { 
+      padding: 16,
+      backgroundColor: colors.cardBackground,
+      marginVertical: 8,
+    },
+    statItem: { 
+      flexDirection: 'row', 
+      justifyContent: 'space-between',
+      marginVertical: 4,
+    },
+    statLabel: { fontSize: 14, color: colors.secondaryText },
+    statValue: { fontSize: 14, fontWeight: '500', color: colors.primaryText },
     membersSection: { padding: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 12 },
     memberItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
@@ -226,7 +396,10 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
       marginRight: 12,
     },
     memberAvatarText: { color: colors.primaryText, fontWeight: 'bold' },
-    memberName: { flex: 1, fontSize: 14, color: colors.primaryText },
+    memberInfo: { flex: 1 },
+    memberName: { fontSize: 14, fontWeight: '500', color: colors.primaryText },
+    memberRole: { fontSize: 12, color: colors.secondaryText, marginTop: 2 },
+    memberContact: { fontSize: 12, color: colors.secondaryText, marginTop: 2 },
     saveButton: {
       backgroundColor: colors.primaryButton,
       margin: 16,
@@ -234,7 +407,35 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
       borderRadius: 8,
       alignItems: 'center',
     },
+    saveButtonHighlighted: {
+      backgroundColor: colors.primaryButton,
+      shadowColor: colors.primaryButton,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    saveButtonInactive: {
+      backgroundColor: colors.secondaryText,
+      opacity: 0.6,
+    },
+    saveButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     saveButtonText: { color: colors.primaryButtonText, fontWeight: '600' },
+    saveButtonTextInactive: { 
+      color: colors.primaryText, 
+      opacity: 0.7 
+    },
+    unsavedDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primaryButtonText,
+      marginLeft: 8,
+    },
     saveButtonDisabled: { backgroundColor: colors.secondaryText },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { color: colors.secondaryText, marginTop: 12 },
@@ -265,8 +466,29 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Manage Group</Text>
-        <View style={styles.placeholder} />
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Manage Group</Text>
+          {hasUnsavedChanges && (
+            <View style={styles.unsavedIndicator}>
+              <Text style={styles.unsavedText}>•</Text>
+            </View>
+          )}
+        </View>
+        {isGroupAdmin && hasUnsavedChanges ? (
+          <TouchableOpacity
+            style={styles.headerSaveButton}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.primaryButtonText} />
+            ) : (
+              <Text style={styles.headerSaveButtonText}>Save</Text>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.placeholder} />
+        )}
       </View>
 
       <ScrollView
@@ -283,7 +505,7 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
             {uploadingImage ? (
               <ActivityIndicator size="large" color={colors.primaryButton} />
             ) : groupData.coverImage ? (
-              <Image source={{ uri: groupData.coverImage }} style={styles.coverImage} />
+              <Image source={{ uri: ensureDataUri(groupData.coverImage) || '' }} style={styles.coverImage} />
             ) : (
               <View style={styles.placeholderContainer}>
                 <Text style={styles.groupAvatar}>🎭</Text>
@@ -302,6 +524,7 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
             onChangeText={value => handleInputChange('name', value)}
             placeholder="Enter group name"
             placeholderTextColor={colors.inputPlaceholder}
+            editable={isGroupAdmin}
           />
         </View>
 
@@ -315,7 +538,27 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
             placeholder="Add short description"
             placeholderTextColor={colors.inputPlaceholder}
             multiline
+            editable={isGroupAdmin}
           />
+        </View>
+
+        {/* Group Stats */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Group Information</Text>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Total Members:</Text>
+            <Text style={styles.statValue}>{groupMembers.length}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Total Expenses:</Text>
+            <Text style={styles.statValue}>₹{firebaseGroup?.totalExpenses?.toFixed(0) || 0}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Created On:</Text>
+            <Text style={styles.statValue}>
+              {firebaseGroup?.createdAt ? new Date(firebaseGroup.createdAt).toLocaleDateString() : 'N/A'}
+            </Text>
+          </View>
         </View>
 
         {/* Group Members */}
@@ -323,8 +566,8 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
           <Text style={styles.sectionTitle}>Group Members ({groupMembers.length})</Text>
           {filteredMembers.map(member => (
             <View key={member.userId} style={styles.memberItem}>
-              {member.avatar ? (
-                <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
+              {member.profileImage ? (
+                <Image source={{ uri: ensureDataUri(member.profileImage) || '' }} style={styles.memberAvatar} />
               ) : (
                 <View style={styles.memberAvatarPlaceholder}>
                   <Text style={styles.memberAvatarText}>
@@ -332,8 +575,15 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
                   </Text>
                 </View>
               )}
-              <Text style={styles.memberName}>{member.name}</Text>
-              {isGroupAdmin && !member.isYou && (
+              <View style={styles.memberInfo}>
+                <Text style={styles.memberName}>{member.name}</Text>
+                <Text style={styles.memberRole}>
+                  {member.userId === firebaseGroup?.createdBy ? 'Creator' : 
+                   member.role === 'admin' ? 'Admin' : 'Member'}
+                </Text>
+                <Text style={styles.memberContact}>{member.phoneNumber || member.email || ''}</Text>
+              </View>
+              {isGroupAdmin && member.userId !== user?.id && (
                 <TouchableOpacity onPress={() => handleRemoveMember(member)}>
                   <Ionicons name="person-remove" size={20} color={colors.error} />
                 </TouchableOpacity>
@@ -342,18 +592,35 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
           ))}
         </View>
 
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.primaryText} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
+        {/* Save Button - Only for Admins */}
+        {isGroupAdmin && (
+          <TouchableOpacity
+            style={[
+              styles.saveButton, 
+              saving && styles.saveButtonDisabled,
+              hasUnsavedChanges && styles.saveButtonHighlighted,
+              !hasUnsavedChanges && styles.saveButtonInactive
+            ]}
+            onPress={handleSave}
+            disabled={saving || !hasUnsavedChanges}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.primaryButtonText} />
+            ) : (
+              <View style={styles.saveButtonContent}>
+                <Text style={[
+                  styles.saveButtonText,
+                  !hasUnsavedChanges && styles.saveButtonTextInactive
+                ]}>
+                  {hasUnsavedChanges ? 'Save Changes' : 'No Changes'}
+                </Text>
+                {hasUnsavedChanges && (
+                  <View style={styles.unsavedDot} />
+                )}
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

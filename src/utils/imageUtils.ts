@@ -1,10 +1,19 @@
 import { Alert } from 'react-native';
+import { launchImageLibrary, ImagePickerResponse, ImageLibraryOptions } from 'react-native-image-picker';
 
 export interface ImageResult {
   base64: string;
   uri: string;
   type: string;
   fileName: string;
+  size?: number;
+}
+
+export interface CompressedImage {
+  base64: string;
+  type: string;
+  size: number;
+  uri: string;
 }
 
 /**
@@ -108,4 +117,171 @@ export const getProfileImageUri = (user: {
 
   const displayName = user.firstName || user.name || 'User';
   return getPlaceholderImageUri(displayName);
+};
+
+/**
+ * Pick and process receipt image with compression
+ */
+export const pickReceiptImage = (
+  onSuccess: (image: CompressedImage) => void,
+  onError?: (error: string) => void
+): void => {
+  const options: ImageLibraryOptions = {
+    mediaType: 'photo',
+    quality: 0.5, // Lower quality for receipts (still readable)
+    maxWidth: 1000, // Max width for receipts
+    maxHeight: 1500, // Max height for receipts  
+    includeBase64: true,
+  };
+
+  launchImageLibrary(options, (response: ImagePickerResponse) => {
+    if (response.didCancel) {
+      return;
+    }
+    
+    if (response.errorMessage) {
+      onError?.(response.errorMessage);
+      return;
+    }
+    
+    if (response.assets && response.assets[0]) {
+      const asset = response.assets[0];
+      
+      if (!asset.base64) {
+        onError?.('Failed to convert image to base64');
+        return;
+      }
+      
+      // Check file size
+      const base64Size = (asset.base64.length * 3) / 4;
+      const maxSize = 3 * 1024 * 1024; // 3MB limit for receipts
+      
+      if (base64Size > maxSize) {
+        Alert.alert(
+          'Image Too Large',
+          'Receipt image is too large. Please choose a smaller image or reduce quality.',
+          [{ text: 'OK' }]
+        );
+        onError?.('Image size exceeds 3MB limit');
+        return;
+      }
+      
+      const compressedImage: CompressedImage = {
+        base64: `data:${asset.type || 'image/jpeg'};base64,${asset.base64}`,
+        type: asset.type || 'image/jpeg',
+        size: base64Size,
+        uri: asset.uri || '',
+      };
+      
+      onSuccess(compressedImage);
+    }
+  });
+};
+
+/**
+ * Process expense receipt image
+ */
+export const processReceiptImage = async (uri: string): Promise<ImageResult> => {
+  try {
+    if (!uri || uri === '') {
+      throw new Error('Invalid receipt URI');
+    }
+
+    const base64 = await convertImageToBase64(uri);
+    const sizeInBytes = (base64.length * 3) / 4;
+    const sizeInMB = sizeInBytes / (1024 * 1024);
+
+    if (sizeInMB > 3) {
+      Alert.alert(
+        'Receipt Too Large',
+        'Please select a receipt image smaller than 3MB'
+      );
+      throw new Error('Receipt too large');
+    }
+
+    return {
+      base64,
+      uri,
+      type: 'image/jpeg',
+      fileName: `receipt_${Date.now()}.jpg`,
+      size: sizeInBytes,
+    };
+  } catch (error) {
+    console.error('Error processing receipt:', error);
+    throw error;
+  }
+};
+
+/**
+ * Calculate readable file size
+ */
+export const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+/**
+ * Validate receipt image
+ */
+export const validateReceiptImage = (base64String: string): { valid: boolean; error?: string } => {
+  try {
+    if (!base64String.startsWith('data:image/')) {
+      return { valid: false, error: 'Invalid image format' };
+    }
+    
+    const sizeInBytes = (base64String.length * 3) / 4;
+    const maxSize = 3 * 1024 * 1024; // 3MB
+    
+    if (sizeInBytes > maxSize) {
+      return { valid: false, error: 'Receipt image exceeds 3MB limit' };
+    }
+    
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, error: 'Failed to validate image' };
+  }
+};
+
+/**
+ * Ensures proper data URI format for image display
+ */
+export const ensureDataUri = (imageData: string | null | undefined, mimeType: string = 'image/jpeg'): string | null => {
+  if (!imageData) {
+    return null;
+  }
+
+  // If already a data URI, return as is
+  if (imageData.startsWith('data:')) {
+    return imageData;
+  }
+
+  // If it's base64 without data URI prefix, add it
+  return `data:${mimeType};base64,${imageData}`;
+};
+
+/**
+ * Debug helper for image data
+ */
+export const debugImageData = (imageData: string | null | undefined, label: string = 'Image'): void => {
+  if (!imageData) {
+    console.log(`${label}: No image data`);
+    return;
+  }
+
+  console.log(`${label} Debug:`, {
+    hasData: !!imageData,
+    length: imageData.length,
+    startsWithData: imageData.startsWith('data:'),
+    prefix: imageData.substring(0, 50),
+    isValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(
+      imageData.startsWith('data:') 
+        ? imageData.split(',')[1] || '' 
+        : imageData
+    )
+  });
 };

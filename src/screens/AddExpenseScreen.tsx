@@ -23,6 +23,9 @@ import { launchImageLibrary } from "react-native-image-picker";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { typography } from '../utils/typography';
+import { firebaseService, GroupExpense } from '../services/firebaseService';
+import { useAuth } from '../context/AuthContext';
+import { pickReceiptImage, formatFileSize, validateReceiptImage } from '../utils/imageUtils';
 
 // Enable LayoutAnimation for Android
 if (
@@ -45,13 +48,20 @@ interface Member {
 }
 
 
+
 interface AddExpenseScreenProps {
-  route: { params?: { group?: { id: string; name: string } } };
+  route: { 
+    params?: { 
+      group?: { id: string; name: string };
+      onReturn?: () => void;
+    } 
+  };
   navigation: any;
 }
 
 export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navigation }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { group } = route.params || {};
 
   // (Responsive setup remains the same)
@@ -87,6 +97,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   const [loading, setLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(true);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [receiptSize, setReceiptSize] = useState<number>(0);
 
   const [showPayerModal, setShowPayerModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -131,16 +142,26 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   }, [group]);
 
   const loadGroupMembers = async () => {
+    if (!group?.id) return;
+    
     setMembersLoading(true);
     try {
-      const mockMembers: Member[] = [
-        { id: "1", name: "You", isYou: true, avatar: undefined },
-        { id: "2", name: "Alice", avatar: undefined },
-        { id: "3", name: "Bob", avatar: undefined },
-      ];
-      setGroupMembers(mockMembers);
+      // Load actual group data from Firebase
+      const groupData = await firebaseService.getGroupById(group.id);
+      if (!groupData) {
+        throw new Error('Group not found');
+      }
 
-      const initialMembers = mockMembers.map((m) => ({
+      const formattedMembers: Member[] = groupData.members.map((member) => ({
+        id: member.userId,
+        name: member.userId === user?.id ? 'You' : member.name,
+        avatar: member.profileImage,
+        isYou: member.userId === user?.id,
+      }));
+      
+      setGroupMembers(formattedMembers);
+
+      const initialMembers = formattedMembers.map((m) => ({
         ...m,
         isSelected: true,
         amount: 0,
@@ -148,8 +169,16 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
         shares: 1,
       }));
       setMembers(initialMembers);
-      setPaidBy(initialMembers[0]);
+      
+      // Set current user as default payer
+      const currentUserMember = initialMembers.find(m => m.isYou);
+      if (currentUserMember) {
+        setPaidBy(currentUserMember);
+      } else {
+        setPaidBy(initialMembers[0]);
+      }
     } catch (error) {
+      console.error('Error loading group members:', error);
       Alert.alert("Error", "Failed to load group members");
     } finally {
       setMembersLoading(false);
@@ -162,7 +191,6 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
 
 
   const calculateSplit = () => {
-    // ... (unchanged)
     const totalAmount = parseFloat(amount) || 0;
     const selectedMembers = members.filter((m) => m.isSelected);
     if (!selectedMembers.length) return;
@@ -173,20 +201,40 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
         const equalAmount = totalAmount / selectedMembers.length;
         updatedMembers = updatedMembers.map((m) => ({
           ...m,
-          amount: m.isSelected ? equalAmount : 0,
+          amount: m.isSelected ? Number(equalAmount.toFixed(2)) : 0,
         }));
         break;
       case "Unequal":
-        updatedMembers = updatedMembers.map((m) => ({
-          ...m,
-          amount: m.isSelected ? (m.amount || 0) : 0,
-        }));
+        // For unequal split, verify total matches
+        const currentTotal = updatedMembers
+          .filter(m => m.isSelected)
+          .reduce((sum, m) => sum + (m.amount || 0), 0);
+        
+        if (Math.abs(currentTotal - totalAmount) > 0.01) {
+          // Adjust last member's amount to match total
+          let lastSelectedIndex = -1;
+          for (let i = updatedMembers.length - 1; i >= 0; i--) {
+            if (updatedMembers[i].isSelected) {
+              lastSelectedIndex = i;
+              break;
+            }
+          }
+          if (lastSelectedIndex !== -1) {
+            const adjustment = totalAmount - currentTotal;
+            updatedMembers[lastSelectedIndex].amount = 
+              Number(((updatedMembers[lastSelectedIndex].amount || 0) + adjustment).toFixed(2));
+          }
+        }
         break;
       case "By Percentage":
+        const totalPercentage = selectedMembers.reduce((sum, m) => sum + (m.percentage || 0), 0);
+        if (totalPercentage > 100.01) {
+          Alert.alert("Warning", "Total percentage exceeds 100%");
+        }
         updatedMembers = updatedMembers.map((m) => {
           if (m.isSelected) {
             const percentage = m.percentage || 0;
-            return { ...m, percentage, amount: (totalAmount * percentage) / 100 };
+            return { ...m, percentage, amount: Number(((totalAmount * percentage) / 100).toFixed(2)) };
           }
           return { ...m, amount: 0, percentage: 0 };
         });
@@ -194,11 +242,15 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
       case "By Share":
         const totalShares = selectedMembers.reduce((sum, m) => sum + (m.shares || 0), 0);
          if (totalShares === 0) {
-           updatedMembers = updatedMembers.map((m) => ({...m, amount: m.isSelected ? totalAmount / selectedMembers.length : 0}));
+           const equalShare = totalAmount / selectedMembers.length;
+           updatedMembers = updatedMembers.map((m) => ({
+             ...m, 
+             amount: m.isSelected ? Number(equalShare.toFixed(2)) : 0
+           }));
          } else {
            updatedMembers = updatedMembers.map((m) => ({
             ...m,
-            amount: m.isSelected ? (totalAmount * (m.shares || 0)) / totalShares : 0,
+            amount: m.isSelected ? Number(((totalAmount * (m.shares || 0)) / totalShares).toFixed(2)) : 0,
           }));
          }
         break;
@@ -207,59 +259,155 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   };
   
   const handleUploadReceipt = () => {
-    launchImageLibrary({ mediaType: "photo", quality: 0.8 }, (response) => {
-      if (response.assets && response.assets[0]) {
-        setReceiptImage(response.assets[0].uri || null);
+    pickReceiptImage(
+      (image) => {
+        setReceiptImage(image.base64);
+        setReceiptSize(image.size);
+      },
+      (error) => {
+        Alert.alert('Error', error);
       }
-    });
+    );
   };
 
-  // --- LOGIC MODIFICATION ---
+  const handleRemoveReceipt = () => {
+    Alert.alert(
+      'Remove Receipt',
+      'Are you sure you want to remove the receipt?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove', 
+          style: 'destructive',
+          onPress: () => {
+            setReceiptImage(null);
+            setReceiptSize(0);
+          }
+        },
+      ]
+    );
+  };
+
   const handleSave = async () => {
-    // (Existing validations)
+    // Validations
     if (!description.trim()) return Alert.alert("Error", "Please enter a description");
     if (!amount.trim() || parseFloat(amount) <= 0) return Alert.alert("Error", "Please enter a valid amount");
     if (!selectedCategory) return Alert.alert("Error", "Please select a category");
     
-    // --- NEW VALIDATION ---
     if (selectedCategory?.name === 'Other' && !otherCategoryName.trim()) {
       return Alert.alert("Error", "Please specify a name for the 'Other' category");
     }
-    // --- END NEW VALIDATION ---
     
     if (!paidBy) return Alert.alert("Error", "Please select who paid");
+    if (!group?.id) {
+      console.error('Group ID missing:', group);
+      return Alert.alert("Error", "Group information is missing");
+    }
+    if (!user?.id) {
+      console.error('User ID missing:', user);
+      return Alert.alert("Error", "User information is missing");
+    }
+    
+    console.log('Creating expense for group:', group.id, 'by user:', user.id);
+    
     const selectedMembers = members.filter((m) => m.isSelected);
     if (!selectedMembers.length) return Alert.alert("Error", "Please select members to split");
 
-    // --- MODIFIED DATA ---
-    const expenseData = {
-      description,
-      amount: parseFloat(amount),
-      // If "Other" is selected, save the custom name, otherwise save the default name
-      category: {
-        ...selectedCategory,
-        name: selectedCategory?.name === 'Other' ? otherCategoryName : selectedCategory?.name,
-      },
-      paidBy,
-      splitType,
-      participants: selectedMembers,
-      receiptUrl: receiptImage,
-    };
-    // --- END MODIFIED DATA ---
+    // Validate split amounts
+    const totalAmount = parseFloat(amount);
+    const totalSplit = selectedMembers.reduce((sum, m) => sum + (m.amount || 0), 0);
+    const difference = Math.abs(totalAmount - totalSplit);
+    
+    if (difference > 0.01) {
+      return Alert.alert(
+        "Error", 
+        `Split amounts (${selectedCurrency.symbol}${totalSplit.toFixed(2)}) don't match total (${selectedCurrency.symbol}${totalAmount.toFixed(2)})`
+      );
+    }
+
+    // Validate receipt if present
+    if (receiptImage) {
+      const validation = validateReceiptImage(receiptImage);
+      if (!validation.valid) {
+        return Alert.alert('Error', validation.error || 'Invalid receipt image');
+      }
+    }
+
+    // Additional validation
+    if (!group?.id) {
+      return Alert.alert('Error', 'Group information is missing');
+    }
+    
+    if (!user?.id) {
+      return Alert.alert('Error', 'User information is missing');
+    }
+    
+    if (!description.trim()) {
+      return Alert.alert('Error', 'Please enter expense description');
+    }
+    
+    if (selectedMembers.length === 0) {
+      return Alert.alert('Error', 'Please select at least one participant');
+    }
 
     setLoading(true);
     try {
-      console.log("Saving expense:", expenseData); // Check the saved data
+      const expense: Omit<GroupExpense, 'id'> = {
+        groupId: group?.id || '',
+        description: description || '',
+        amount: totalAmount,
+        category: selectedCategory ? {
+          ...selectedCategory,
+          name: selectedCategory.name === 'Other' ? (otherCategoryName || 'Other') : selectedCategory.name,
+        } : {
+          id: 7,
+          name: 'General',
+          emoji: '📌',
+          color: '#F3F4F6'
+        },
+        paidBy: {
+          id: paidBy?.id || user?.id || '',
+          name: paidBy?.name || user?.name || 'Unknown',
+          isYou: paidBy?.isYou || false
+        },
+        splitType: splitType || 'Equal',
+        participants: selectedMembers.map(m => ({
+          id: m.id || '',
+          name: m.name || 'Unknown',
+          amount: m.amount || 0,
+          isYou: m.isYou || false
+        })),
+        ...(receiptImage?.startsWith('data:') && { receiptBase64: receiptImage }),
+        createdAt: new Date().toISOString(),
+        createdBy: user?.id || '',
+        updatedAt: new Date().toISOString(),
+        isActive: true,
+      };
+
+      // Create expense in Firebase
+      console.log('Creating expense with data:', expense);
+      const createdExpense = await firebaseService.createGroupExpense(group.id, expense);
+      console.log('Expense created successfully:', createdExpense);
+      
       Alert.alert("Success", "Expense saved successfully", [
-        { text: "OK", onPress: () => navigation.goBack() },
+        { 
+          text: "OK", 
+          onPress: () => {
+            // Call onReturn callback if provided
+            if (route.params?.onReturn) {
+              route.params.onReturn();
+            }
+            navigation.goBack();
+          }
+        },
       ]);
-    } catch (error) {
-      Alert.alert("Error", "Failed to save expense");
+    } catch (error: any) {
+      console.error('Error saving expense:', error);
+      Alert.alert("Error", error.message || "Failed to save expense");
     } finally {
       setLoading(false);
     }
   };
-  // --- END LOGIC MODIFICATION ---
   
   const handleToggleMember = (memberId: string) => {
     // ... (unchanged)
@@ -507,7 +655,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
                         placeholder="0.00"
                         placeholderTextColor={colors.secondaryText}
                         keyboardType="numeric"
-                        value={member.amount > 0 ? member.amount.toString() : ""}
+                        value={(member.amount || 0) > 0 ? (member.amount || 0).toString() : ""}
                         onChangeText={(val) => handleMemberChange(member.id, val, "amount")}
                       />
                     )}
@@ -517,7 +665,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
                         placeholder="%"
                         placeholderTextColor={colors.secondaryText}
                         keyboardType="numeric"
-                        value={member.percentage > 0 ? member.percentage.toString() : ""}
+                        value={(member.percentage || 0) > 0 ? (member.percentage || 0).toString() : ""}
                         onChangeText={(val) => handleMemberChange(member.id, val, "percentage")}
                       />
                     )}
@@ -527,7 +675,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
                         placeholder="shares"
                         placeholderTextColor={colors.secondaryText}
                         keyboardType="numeric"
-                        value={member.shares > 0 ? member.shares.toString() : ""}
+                        value={(member.shares || 0) > 0 ? (member.shares || 0).toString() : ""}
                         onChangeText={(val) => handleMemberChange(member.id, val, "shares")}
                       />
                     )}
@@ -543,11 +691,29 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
           </View>
         </View>
 
-        {/* (Receipt Upload Button unchanged) */}
-        <TouchableOpacity style={styles.uploadButton} onPress={handleUploadReceipt}>
-          <Ionicons name={receiptImage ? "receipt" : "receipt-outline"} size={scaledFontSize.lg} color={colors.primaryText} />
-          <Text style={styles.uploadText}>{receiptImage ? "Receipt Added" : "Upload Receipt"}</Text>
-        </TouchableOpacity>
+        {/* Receipt Upload Section */}
+        <View style={styles.receiptContainer}>
+          {!receiptImage ? (
+            <TouchableOpacity style={styles.uploadButton} onPress={handleUploadReceipt}>
+              <Ionicons name="receipt-outline" size={scaledFontSize.lg} color={colors.primaryText} />
+              <Text style={styles.uploadText}>Upload Receipt</Text>
+              <Text style={styles.uploadHint}>Max 3MB • JPEG, PNG</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.receiptPreview}>
+              <View style={styles.receiptInfo}>
+                <Ionicons name="receipt" size={scaledFontSize.lg} color={colors.primaryButton} />
+                <View style={styles.receiptDetails}>
+                  <Text style={styles.receiptText}>Receipt Uploaded</Text>
+                  <Text style={styles.receiptSize}>{formatFileSize(receiptSize)}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={handleRemoveReceipt}>
+                <Ionicons name="close-circle" size={scaledFontSize.xl} color={colors.errorText} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
         
         {/* (Save Button unchanged) */}
         <TouchableOpacity style={styles.button} onPress={handleSave} disabled={loading}>
@@ -918,5 +1084,45 @@ const createStyles = (
     color: colors.primaryButtonText,
     fontSize: fonts.button,
     fontWeight: '600',
+  },
+  receiptContainer: {
+    marginTop: scale(8),
+    marginBottom: scale(12),
+  },
+  receiptPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.cardBackground,
+    borderRadius: scale(8),
+    padding: scale(12),
+    borderWidth: 1,
+    borderColor: colors.primaryButton + '30',
+  },
+  receiptInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  receiptDetails: {
+    marginLeft: scale(10),
+  },
+  receiptText: {
+    fontSize: fonts.body,
+    color: colors.primaryText,
+    fontWeight: '500',
+  },
+  receiptSize: {
+    fontSize: fonts.caption,
+    color: colors.secondaryText,
+    marginTop: scale(2),
+  },
+  uploadHint: {
+    fontSize: fonts.caption,
+    color: colors.secondaryText,
+    marginTop: scale(4),
+  },
+  errorText: {
+    color: colors.errorText || '#FF3B30',
   },
 });

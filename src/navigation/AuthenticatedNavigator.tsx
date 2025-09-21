@@ -17,6 +17,8 @@ import { ManageGroupScreen } from '../screens/ManageGroupScreen';
 import { AddExpenseScreen } from '../screens/AddExpenseScreen';
 import { AddMemberScreen } from '../screens/AddMemberScreen';
 import { ExpenseDetailScreen } from '../screens/ExpenseDetailScreen';
+import { ViewReceiptScreen } from '../screens/ViewReceiptScreen';
+import { AllGroupsScreen } from '../screens/AllGroupsScreen';
 
 type TabParamList = {
   Home: undefined;
@@ -32,6 +34,8 @@ type StackParamList = {
   AddExpense: { group: any };
   AddMember: { group: any };
   ExpenseDetail: { expense: any; group: any };
+  ViewReceipt: { receiptBase64: string; expenseDescription?: string };
+  AllGroups: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -91,6 +95,8 @@ export const HomeStackNavigator: React.FC = () => {
       <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
       <Stack.Screen name="AddMember" component={AddMemberScreen} />
       <Stack.Screen name="ExpenseDetail" component={ExpenseDetailScreen} />
+      <Stack.Screen name="ViewReceipt" component={ViewReceiptScreen} />
+      <Stack.Screen name="AllGroups" component={AllGroupsScreen} />
     </Stack.Navigator>
   );
 };

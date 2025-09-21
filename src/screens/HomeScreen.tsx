@@ -23,6 +23,7 @@ import { firebaseService, Group as FirebaseGroup } from '../services/firebaseSer
 // We now use this object to create scaled sizes
 import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { ensureDataUri } from '../utils/imageUtils';
 
 // (Interfaces remain the same)
 interface GroupDetail {
@@ -57,6 +58,70 @@ interface HomeScreenProps {
   navigation: any;
 }
 
+// Helper function to calculate user's balance in a specific group
+const calculateUserGroupBalance = (expenses: any[], userId: string, members: any[]) => {
+  let netBalance = 0;
+  const details: GroupDetail[] = [];
+  const memberBalances: { [key: string]: number } = {};
+
+  // Initialize member balances
+  members.forEach(member => {
+    memberBalances[member.userId] = 0;
+  });
+
+  // Process each expense
+  expenses.forEach(expense => {
+    const payerId = expense.paidBy.id;
+    
+    expense.participants.forEach((participant: any) => {
+      const participantId = participant.id || participant.userId;
+      
+      if (participantId !== payerId) {
+        // Participant owes payer
+        memberBalances[participantId] -= participant.amount;
+        memberBalances[payerId] += participant.amount;
+      }
+    });
+  });
+
+  // Calculate net balance for current user
+  netBalance = memberBalances[userId] || 0;
+
+  // Generate balance details for current user
+  members.forEach(member => {
+    if (member.userId !== userId) {
+      const memberBalance = memberBalances[member.userId] || 0;
+      const userBalance = memberBalances[userId] || 0;
+      
+      // If user owes this member
+      if (userBalance < 0 && memberBalance > 0) {
+        const amount = Math.min(Math.abs(userBalance), memberBalance);
+        if (amount > 0.01) {
+          details.push({
+            text: `you owe ${member.name}`,
+            amount: amount,
+            type: 'owe'
+          });
+        }
+      }
+      
+      // If this member owes user
+      if (userBalance > 0 && memberBalance < 0) {
+        const amount = Math.min(userBalance, Math.abs(memberBalance));
+        if (amount > 0.01) {
+          details.push({
+            text: `${member.name} owes you`,
+            amount: amount,
+            type: 'owed'
+          });
+        }
+      }
+    }
+  });
+
+  return { netBalance, details };
+};
+
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // --- STATUS BAR FIX ---
@@ -64,7 +129,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // If it provides a string like `mode`, you can do:
   // const { colors, mode } = useTheme();
   // const isDarkMode = mode === 'dark';
-  const { colors, isDarkMode } = useTheme();
+  const { colors } = useTheme();
   const { user } = useAuth();
   // --- END FIX ---
 
@@ -117,23 +182,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const userGroups = await firebaseService.getUserGroups(user.id);
       setFirebaseGroups(userGroups);
       
-      // Convert Firebase groups to legacy format for display
-      const convertedGroups: Group[] = userGroups.map(group => ({
-        id: group.id,
-        name: group.name,
-        description: group.description,
-        avatar: group.coverImageBase64 ? null : '🎭', // Use default emoji if no cover image
-        coverImageUrl: group.coverImageBase64 || null,
-        youOwe: 0, // TODO: Calculate from expenses
-        youAreOwed: 0, // TODO: Calculate from expenses
-        details: [], // TODO: Calculate from expenses
-        moreBalances: 0,
-        members: group.members,
-        createdAt: group.createdAt,
-        totalExpenses: group.totalExpenses,
-      }));
+      // Calculate balances for each group
+      const convertedGroups: Group[] = await Promise.all(
+        userGroups.map(async (group) => {
+          let youOwe = 0;
+          let youAreOwed = 0;
+          let details: GroupDetail[] = [];
+          
+          try {
+            // Get expenses for this group
+            const groupExpenses = await firebaseService.getGroupExpenses(group.id);
+            console.log(`Group ${group.name} has ${groupExpenses.length} expenses`);
+            
+            // Calculate user's balance in this group
+            const balance = calculateUserGroupBalance(groupExpenses, user.id, group.members);
+            youOwe = Math.max(0, -balance.netBalance);
+            youAreOwed = Math.max(0, balance.netBalance);
+            details = balance.details;
+            
+          } catch (expenseError) {
+            console.error(`Error loading expenses for group ${group.id}:`, expenseError);
+          }
+
+          return {
+            id: group.id,
+            name: group.name,
+            description: group.description,
+            avatar: group.coverImageBase64 ? null : '🎭',
+            coverImageUrl: group.coverImageBase64 || null,
+            youOwe,
+            youAreOwed,
+            details,
+            moreBalances: details.length > 3 ? details.length - 3 : 0,
+            members: group.members,
+            createdAt: group.createdAt,
+            totalExpenses: group.totalExpenses,
+          };
+        })
+      );
       
       setGroups(convertedGroups);
+      
+      // Calculate overall balance
+      calculateOverallBalance(convertedGroups);
+      
       console.log(`Loaded ${userGroups.length} groups from Firebase`);
     } catch (error: any) {
       console.error('Error loading groups from Firebase:', error);
@@ -154,22 +246,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
   };
 
+  const calculateOverallBalance = (groups: Group[]) => {
+    let totalYouOwe = 0;
+    let totalYouAreOwed = 0;
+    const groupBalanceDetails: any[] = [];
+
+    groups.forEach(group => {
+      totalYouOwe += group.youOwe;
+      totalYouAreOwed += group.youAreOwed;
+      
+      // Add group balance details
+      if (group.youOwe > 0 || group.youAreOwed > 0) {
+        groupBalanceDetails.push({
+          groupName: group.name,
+          groupId: group.id,
+          youOwe: group.youOwe,
+          youAreOwed: group.youAreOwed,
+          netBalance: group.youAreOwed - group.youOwe,
+          details: group.details
+        });
+      }
+    });
+
+    const netBalance = totalYouAreOwed - totalYouOwe;
+
+    setOverallBalance({
+      netBalance,
+      totalYouOwe,
+      totalYouAreOwed,
+      groupBalanceDetails
+    });
+  };
+
   const loadGroupsAndBalance = async () => {
     setBalanceLoading(true);
     
-    // Load groups from Firebase
+    // Load groups from Firebase with real expense calculations
     await loadGroupsFromFirebase();
     
-    // For now, keep mock balance calculation
-    // TODO: Replace with real expense calculations
-    const mockBalance: OverallBalance = {
-      netBalance: 0,
-      totalYouOwe: 0,
-      totalYouAreOwed: 0,
-      groupBalanceDetails: [],
-    };
-
-    setOverallBalance(mockBalance);
     setBalanceLoading(false);
   };
 
@@ -231,7 +345,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // Set the status bar content color based on the active theme
   // 'dark-content' (black text) for light mode
   // 'light-content' (white text) for dark mode
-  const statusBarTheme = isDarkMode ? 'light-content' : 'dark-content';
+  const statusBarTheme = 'dark-content'; // Default to dark content
   // --- END FIX ---
 
   return (
@@ -326,47 +440,69 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Text style={styles.emptySubtext}>Create your first group to start splitting expenses!</Text>
           </View>
         ) : (
-          filteredGroups.map(group => (
-            <TouchableOpacity
-              key={group.id}
-              style={styles.groupCard}
-              onPress={() => navigation.navigate('GroupDetail', { group })}
-            >
-              <View style={styles.groupHeader}>
-                <View style={styles.avatarContainer}>
-                  {group.coverImageUrl ? (
-                    <Image source={{ uri: group.coverImageUrl }} style={styles.avatarImage} />
+          <>
+            {filteredGroups.map(group => (
+              <TouchableOpacity
+                key={group.id}
+                style={styles.groupCard}
+                onPress={() => navigation.navigate('GroupDetail', { group })}
+              >
+                <View style={styles.groupHeader}>
+                  <View style={styles.avatarContainer}>
+                    {group.coverImageUrl ? (
+                      <Image source={{ uri: ensureDataUri(group.coverImageUrl) || '' }} style={styles.avatarImage} />
+                    ) : (
+                      <Text style={styles.avatar}>{group.avatar}</Text>
+                    )}
+                  </View>
+                  <View style={styles.groupInfo}>
+                    <Text style={styles.groupName}>{group.name}</Text>
+                    {group.description && (
+                      <Text style={styles.groupDescription}>{group.description}</Text>
+                    )}
+                    <Text style={styles.membersCount}>{group.members?.length || 0} members</Text>
+                  </View>
+                </View>
+                <View style={styles.groupDetails}>
+                  {group.details.length > 0 ? (
+                    group.details.map((detail, idx) => (
+                      <View key={idx} style={styles.detailRow}>
+                        <Text style={styles.detailText}>{detail.text}</Text>
+                        <Text style={styles.detailText}>
+                          {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
+                        </Text>
+                      </View>
+                    ))
                   ) : (
-                    <Text style={styles.avatar}>{group.avatar}</Text>
+                    <Text style={styles.noExpensesText}>No expenses yet</Text>
                   )}
+                  {group.moreBalances ? (
+                    <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
+                  ) : null}
                 </View>
-                <View style={styles.groupInfo}>
-                  <Text style={styles.groupName}>{group.name}</Text>
-                  {group.description && (
-                    <Text style={styles.groupDescription}>{group.description}</Text>
-                  )}
-                  <Text style={styles.membersCount}>{group.members?.length || 0} members</Text>
-                </View>
-              </View>
-              <View style={styles.groupDetails}>
-                {group.details.length > 0 ? (
-                  group.details.map((detail, idx) => (
-                    <View key={idx} style={styles.detailRow}>
-                      <Text style={styles.detailText}>{detail.text}</Text>
-                      <Text style={styles.detailText}>
-                        {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.noExpensesText}>No expenses yet</Text>
-                )}
-                {group.moreBalances ? (
-                  <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          ))
+              </TouchableOpacity>
+            ))}
+            
+            {/* See All Groups Button */}
+            {filteredGroups.length > 0 && (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={() => navigation.navigate('AllGroups')}
+              >
+                <MaterialIcons
+                  name="view-list"
+                  size={scaledFontSize.lg}
+                  color={colors.primaryButton}
+                />
+                <Text style={styles.seeAllButtonText}>See All Groups</Text>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={scaledFontSize.lg}
+                  color={colors.primaryButton}
+                />
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -576,5 +712,25 @@ const createStyles = (
       shadowOpacity: 0.25,
       shadowRadius: scale(4),
       elevation: 5,
+    },
+    seeAllButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.cardBackground,
+      marginHorizontal: scale(16),
+      marginVertical: scale(12),
+      paddingVertical: scale(16),
+      paddingHorizontal: scale(20),
+      borderRadius: scale(8),
+      borderWidth: 1,
+      borderColor: colors.primaryButton,
+    },
+    seeAllButtonText: {
+      ...typography.text.body,
+      color: colors.primaryButton,
+      fontSize: fonts.body,
+      fontWeight: '600',
+      marginHorizontal: scale(8),
     },
   });

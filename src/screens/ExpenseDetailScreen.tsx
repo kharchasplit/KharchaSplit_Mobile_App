@@ -13,6 +13,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ensureDataUri, debugImageData } from '../utils/imageUtils';
 
 interface ExpenseDetailScreenProps {
   route: {
@@ -48,11 +49,39 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
     loadExpenseDetails();
   }, []);
 
+
   const loadExpenseDetails = async () => {
     setLoading(true);
     try {
+      console.log('Loading expense details:', expense);
+      console.log('Group members:', group.members);
+      
       setExpenseData(expense);
-      setGroupMembers(group.members || []);
+      
+      // Handle both formats of group members
+      let members = group.members || [];
+      
+      // If we have Firebase format, transform it
+      if (members.length > 0 && members[0].userId && !members[0].id) {
+        members = members.map((member: any) => ({
+          ...member,
+          id: member.userId,
+          email: member.phoneNumber || member.email,
+          // Keep the avatar field for compatibility
+          avatar: member.profileImage || member.avatar,
+        }));
+      } else {
+        // Also ensure avatar field is properly mapped for other formats
+        members = members.map((member: any) => ({
+          ...member,
+          avatar: member.profileImage || member.avatar,
+        }));
+      }
+      
+      setGroupMembers(members);
+      console.log('Processed group members:', members);
+      
+      
     } catch (error) {
       console.error('Error loading expense details:', error);
       Alert.alert('Error', 'Failed to load expense details');
@@ -60,6 +89,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
       setLoading(false);
     }
   };
+
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
@@ -82,23 +112,45 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
     });
   };
 
+
   const renderParticipant = (participant: any) => {
-    const member = groupMembers.find((m) => m.userId === participant.userId);
+    // Look for member using both userId and id for compatibility
+    const participantId = participant.userId || participant.id;
+    const member = groupMembers.find((m) => 
+      m.userId === participantId || m.id === participantId
+    );
+
+    // Use participant data directly if member not found but participant has name
+    const displayName = member?.name || participant.name || 'Unknown User';
+    const displayEmail = member?.email || member?.phoneNumber || participant.email || '';
+    const displayAvatar = member?.avatar || participant.avatar;
 
     return (
-      <View key={participant.userId} style={styles(colors).participantItem}>
-        {member?.avatar ? (
-          <Image source={{ uri: member.avatar }} style={styles(colors).participantAvatar} />
-        ) : (
-          <View style={styles(colors).participantAvatarPlaceholder}>
-            <Text style={styles(colors).participantAvatarText}>
-              {member?.name?.charAt(0).toUpperCase() || 'U'}
-            </Text>
-          </View>
-        )}
+      <View key={participantId} style={styles(colors).participantItem}>
+        {(() => {
+          const imageUri = ensureDataUri(displayAvatar);
+          return imageUri ? (
+            <Image 
+              source={{ uri: imageUri }} 
+              style={styles(colors).participantAvatar}
+              onError={() => {
+                console.log('Failed to load participant avatar:', displayName);
+                debugImageData(displayAvatar, `Participant ${displayName} Avatar`);
+              }}
+            />
+          ) : (
+            <View style={styles(colors).participantAvatarPlaceholder}>
+              <Text style={styles(colors).participantAvatarText}>
+                {displayName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          );
+        })()}
         <View style={styles(colors).participantInfo}>
-          <Text style={styles(colors).participantName}>{member?.name || 'Unknown User'}</Text>
-          <Text style={styles(colors).participantEmail}>{member?.email || 'No email'}</Text>
+          <Text style={styles(colors).participantName}>{displayName}</Text>
+          {displayEmail && (
+            <Text style={styles(colors).participantEmail}>{displayEmail}</Text>
+          )}
         </View>
         <View style={styles(colors).participantAmount}>
           <Text style={styles(colors).participantAmountText}>₹{participant.amount.toFixed(0)}</Text>
@@ -161,15 +213,25 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
         <View style={styles(colors).section}>
           <Text style={styles(colors).sectionTitle}>Paid By</Text>
           <View style={styles(colors).paidByContainer}>
-            {paidByMember?.avatar ? (
-              <Image source={{ uri: paidByMember.avatar }} style={styles(colors).paidByAvatar} />
-            ) : (
-              <View style={styles(colors).paidByAvatarPlaceholder}>
-                <Text style={styles(colors).paidByAvatarText}>
-                  {paidByMember?.name?.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </View>
-            )}
+            {(() => {
+              const imageUri = ensureDataUri(paidByMember?.avatar);
+              return imageUri ? (
+                <Image 
+                  source={{ uri: imageUri }} 
+                  style={styles(colors).paidByAvatar}
+                  onError={() => {
+                    console.log('Failed to load paid by avatar:', paidByMember?.name);
+                    debugImageData(paidByMember?.avatar, `PaidBy ${paidByMember?.name} Avatar`);
+                  }}
+                />
+              ) : (
+                <View style={styles(colors).paidByAvatarPlaceholder}>
+                  <Text style={styles(colors).paidByAvatarText}>
+                    {paidByMember?.name?.charAt(0).toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              );
+            })()}
             <View style={styles(colors).paidByInfo}>
               <Text style={styles(colors).paidByName}>{paidByMember?.name || 'Unknown User'}</Text>
               <Text style={styles(colors).paidByEmail}>{paidByMember?.email || 'No email'}</Text>
@@ -207,11 +269,40 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
         </View>
 
         {/* Receipt */}
-        {currentExpense.receiptUrl && (
+        {(currentExpense.receiptUrl || currentExpense.receiptBase64) && (
           <View style={styles(colors).section}>
             <Text style={styles(colors).sectionTitle}>Receipt</Text>
-            <TouchableOpacity style={styles(colors).receiptContainer}>
-              <Image source={{ uri: currentExpense.receiptUrl }} style={styles(colors).receiptImage} />
+            <TouchableOpacity 
+              style={styles(colors).receiptContainer}
+              onPress={() => {
+                const receiptData = currentExpense.receiptUrl || currentExpense.receiptBase64;
+                const formattedReceipt = ensureDataUri(receiptData);
+                
+                debugImageData(formattedReceipt, 'ExpenseDetail Navigation');
+                
+                if (formattedReceipt) {
+                  navigation.navigate('ViewReceipt', {
+                    receiptBase64: formattedReceipt,
+                    expenseDescription: currentExpense.description
+                  });
+                } else {
+                  Alert.alert('Error', 'Receipt image not available');
+                }
+              }}
+            >
+              <Image 
+                source={{ 
+                  uri: ensureDataUri(currentExpense.receiptUrl || currentExpense.receiptBase64) || ''
+                }} 
+                style={styles(colors).receiptImage}
+                onError={(error) => {
+                  console.error('Receipt image failed to load:', error.nativeEvent.error);
+                  debugImageData(
+                    currentExpense.receiptUrl || currentExpense.receiptBase64, 
+                    'Failed Receipt Image'
+                  );
+                }}
+              />
               <View style={styles(colors).receiptOverlay}>
                 <Ionicons name="eye" size={24} color="#FFFFFF" />
                 <Text style={styles(colors).receiptText}>View Receipt</Text>
@@ -277,7 +368,8 @@ const styles = (colors: any) =>
     expenseAmountText: { fontSize: 24, fontWeight: '700', color: colors.primaryText },
 
     section: { backgroundColor: colors.cardBackground, marginVertical: 4, padding: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 16 },
+    sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 4 },
+    sectionSubtitle: { fontSize: 12, color: colors.secondaryText, marginBottom: 12 },
 
     paidByContainer: { flexDirection: 'row', alignItems: 'center' },
     paidByAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
