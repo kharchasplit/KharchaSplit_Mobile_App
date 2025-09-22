@@ -15,6 +15,8 @@ import { FAQs } from './FAQs';
 import { ContactSupport } from './ContactSupport';
 import { ReportAProblem } from './Reportaproblem';
 import { AppVersion } from './AppVersion';
+import { TermsAndConditions } from './TermsAndConditions';
+import { PrivacyPolicy } from './PrivacyPolicy';
 
 interface HelpandSupportProps {
   onClose: () => void;
@@ -27,6 +29,8 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
   const [showContactSupport, setShowContactSupport] = useState(false);
   const [showReportaproblem, setShowReportaproblem] = useState(false);
   const [showAppVersion, setShowAppVersion] = useState(false);
+  const [showTermsAndConditions, setShowTermsAndConditions] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
   const Helpoptions = [
     {
@@ -49,6 +53,18 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
     },
     {
       id: 4,
+      title: 'Terms & Conditions',
+      icon: 'document-text-outline',
+      onPress: () => setShowTermsAndConditions(true),
+    },
+    {
+      id: 5,
+      title: 'Privacy Policy',
+      icon: 'shield-checkmark-outline',
+      onPress: () => setShowPrivacyPolicy(true),
+    },
+    {
+      id: 6,
       title: 'App Version',
       icon: 'apps-outline',
       onPress: () => setShowAppVersion(true),
@@ -69,7 +85,7 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
       </View>
 
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.text}>Help info and Support</Text>
+        {/* <Text style={styles.text}>Help info and Support</Text> */}
 
         {Helpoptions.map(item => (
           <TouchableOpacity
@@ -102,6 +118,16 @@ export const HelpandSupport: React.FC<HelpandSupportProps> = ({ onClose }) => {
         {/* Report a problem Modal */}
         <Modal visible={showReportaproblem} animationType="slide" presentationStyle="pageSheet">
           <ReportAProblem onClose={() => setShowReportaproblem(false)} />
+        </Modal>
+
+        {/* Terms & Conditions Modal */}
+        <Modal visible={showTermsAndConditions} animationType="slide" presentationStyle="pageSheet">
+          <TermsAndConditions onClose={() => setShowTermsAndConditions(false)} />
+        </Modal>
+
+        {/* Privacy Policy Modal */}
+        <Modal visible={showPrivacyPolicy} animationType="slide" presentationStyle="pageSheet">
+          <PrivacyPolicy onClose={() => setShowPrivacyPolicy(false)} />
         </Modal>
 
         {/* App Version Modal */}

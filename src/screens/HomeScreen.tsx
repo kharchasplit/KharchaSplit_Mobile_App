@@ -342,17 +342,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const styles = createStyles(colors, scale, scaledFontSize);
 
   // --- STATUS BAR FIX ---
-  // Set the status bar content color based on the active theme
-  // 'dark-content' (black text) for light mode
-  // 'light-content' (white text) for dark mode
-  const statusBarTheme = 'dark-content'; // Default to dark content
+  // Use dynamic status bar style from theme colors
   // --- END FIX ---
 
   return (
     <SafeAreaView style={styles.container}>
        {/* --- STATUS BAR FIX --- */}
-       {/* Use the new dynamic statusBarTheme variable */}
-       <StatusBar barStyle={statusBarTheme} backgroundColor={colors.background} />
+       {/* Use dynamic status bar style from theme colors */}
+       <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.statusBarBackground} />
        {/* --- END FIX --- */}
        
       {/* Header */}

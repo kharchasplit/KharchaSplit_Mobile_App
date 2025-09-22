@@ -1273,7 +1273,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         <View style={styles.tabContentContainer}>{renderTabContent()}</View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('AddExpense', {group: currentGroup})}>
+      <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('AddExpense', {group: currentGroup, onReturn: loadGroupData})}>
         <Ionicons name="add" size={scale(28)} color="#FFFFFF" />
       </TouchableOpacity>
 

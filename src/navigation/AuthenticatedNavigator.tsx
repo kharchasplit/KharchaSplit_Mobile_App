@@ -19,6 +19,7 @@ import { AddMemberScreen } from '../screens/AddMemberScreen';
 import { ExpenseDetailScreen } from '../screens/ExpenseDetailScreen';
 import { ViewReceiptScreen } from '../screens/ViewReceiptScreen';
 import { AllGroupsScreen } from '../screens/AllGroupsScreen';
+import { PaymentHistoryScreen } from '../screens/PaymentHistoryScreen';
 
 type TabParamList = {
   Home: undefined;
@@ -36,10 +37,12 @@ type StackParamList = {
   ExpenseDetail: { expense: any; group: any };
   ViewReceipt: { receiptBase64: string; expenseDescription?: string };
   AllGroups: undefined;
+  PaymentHistory: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<StackParamList>();
+const ProfileStack = createStackNavigator();
 
 interface TabBarIconProps {
   name: keyof TabParamList;
@@ -97,7 +100,18 @@ export const HomeStackNavigator: React.FC = () => {
       <Stack.Screen name="ExpenseDetail" component={ExpenseDetailScreen} />
       <Stack.Screen name="ViewReceipt" component={ViewReceiptScreen} />
       <Stack.Screen name="AllGroups" component={AllGroupsScreen} />
+      <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
     </Stack.Navigator>
+  );
+};
+
+// Profile Stack Navigator
+export const ProfileStackNavigator: React.FC = () => {
+  return (
+    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
+    </ProfileStack.Navigator>
   );
 };
 
@@ -135,7 +149,7 @@ export const AuthenticatedNavigator: React.FC = () => {
     >
       <Tab.Screen name="Home" component={HomeStackNavigator} options={{ title: 'My Groups', headerShown: false }} />
       <Tab.Screen name="Activity" component={ActivityScreen} options={{ title: 'Activity', headerShown: false }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile', headerShown: false }} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} options={{ title: 'Profile', headerShown: false }} />
     </Tab.Navigator>
   );
 };

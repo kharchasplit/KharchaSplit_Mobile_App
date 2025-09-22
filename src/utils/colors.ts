@@ -17,6 +17,8 @@ const darkColors = {
   warning: '#E3B341',           // A clear yellow/gold
   primaryGradient: ['#23C5A0', '#30D1B2'], // Mint gradient
   backgroundGradient: ['#161B22', '#0D1117'], // Subtle background gradient
+  statusBarStyle: 'light-content' as 'light-content' | 'dark-content',
+  statusBarBackground: '#0D1117', // Dark background
 } as const;
 
 // ☀️ Light Mode (Clean & Mint)
@@ -38,6 +40,8 @@ const lightColors = {
   warning: '#BF8600',           // A clear, accessible yellow/brown
   primaryGradient: ['#23C5A0', '#23866E'],
   backgroundGradient: ['#FFFFFF', '#F6F8FA'],
+  statusBarStyle: 'dark-content' as 'light-content' | 'dark-content',
+  statusBarBackground: '#F6F8FA', // Light background
 } as const;
 
 // 🛠️ Theme helper (Your existing helper is perfect)

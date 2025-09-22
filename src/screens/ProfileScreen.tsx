@@ -8,10 +8,10 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { EditProfileScreen } from './EditProfileScreen';
 import { ThemeSettingsScreen } from './ThemeSettingsScreen';
-import { PaymentHistoryScreen } from './PaymentHistoryScreen';
 import { ReferralSystemScreen } from './ReferralSystemScreen';
 import { Settings } from './Settings';
 import { HelpandSupport } from './HelpandSupport';
@@ -29,14 +29,13 @@ interface UserProfile {
   profileImageUrl: string | null;
 }
 
-type ProfileScreenProps = Partial<NavigationProps>;
+type ProfileScreenProps = NavigationProps;
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { colors } = useTheme();
   const { user, logout, isLoading } = useAuth();
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showThemeSettings, setShowThemeSettings] = useState(false);
-  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [showReferralSystem, setShowReferralSystem] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelpandSupport, setShowHelpandSupport] = useState(false);
@@ -60,7 +59,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
 
   const menuItems = [
     { id: 1, title: 'Theme Setting', icon: 'palette', onPress: () => setShowThemeSettings(true) },
-    { id: 2, title: 'Payments', icon: 'credit-card', onPress: () => setShowPaymentHistory(true) },
+    { id: 2, title: 'Payments', icon: 'credit-card', onPress: () => navigation.navigate('PaymentHistory') },
     { id: 3, title: 'Settings', icon: 'settings', onPress: () => setShowSettings(true) },
     { id: 4, title: 'Referral System', icon: 'card-giftcard', onPress: () => setShowReferralSystem(true) },
     { id: 5, title: 'Help & Support', icon: 'help-outline', onPress: () => setShowHelpandSupport(true) },
@@ -77,6 +76,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar 
+        barStyle={colors.statusBarStyle} 
+        backgroundColor={colors.statusBarBackground} 
+      />
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
@@ -118,7 +121,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             </View>
           </View>
           <TouchableOpacity style={styles.editButton} onPress={() => setShowEditProfile(true)}>
-            <Text style={{ color: colors.secondaryText, fontSize: 14 }}>Edit</Text>
+            <MaterialIcons name="edit" size={20} color={colors.primaryButton} />
           </TouchableOpacity>
         </View>
 
@@ -168,9 +171,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
         <ThemeSettingsScreen onClose={() => setShowThemeSettings(false)} />
       </Modal>
 
-      <Modal visible={showPaymentHistory} animationType="slide" presentationStyle="pageSheet">
-        <PaymentHistoryScreen onClose={() => setShowPaymentHistory(false)} />
-      </Modal>
 
       <Modal visible={showReferralSystem} animationType="slide" presentationStyle="pageSheet">
         <ReferralSystemScreen onClose={() => setShowReferralSystem(false)} />

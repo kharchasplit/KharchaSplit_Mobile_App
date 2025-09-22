@@ -148,10 +148,29 @@ export interface Settlement {
   paymentNote?: string;
 }
 
+export interface Activity {
+  id?: string;
+  userId: string;
+  userName: string;
+  type: 'expense_added' | 'payment_made' | 'group_created' | 'group_joined' | 'settlement_created' | 'settlement_confirmed';
+  title: string;
+  description?: string;
+  groupId?: string;
+  groupName?: string;
+  expenseId?: string;
+  expenseDescription?: string;
+  amount?: number;
+  relatedUserId?: string;
+  relatedUserName?: string;
+  createdAt: string;
+  metadata?: Record<string, any>;
+}
+
 class FirebaseService {
   private _usersCollection = firestore().collection('users');
   private _referralsCollection = firestore().collection('referrals');
   private _groupsCollection = firestore().collection('groups');
+  private _activitiesCollection = firestore().collection('activities');
 
   // Expose usersCollection for direct queries when needed
   get usersCollection() {
@@ -259,6 +278,101 @@ class FirebaseService {
     } catch (error) {
       console.error('Error deactivating user:', error);
       throw new Error('Failed to deactivate user');
+    }
+  }
+
+  /**
+   * Comprehensive account deactivation with optional data cleanup
+   */
+  async deactivateUserAccount(userId: string, options: {
+    deactivateGroups?: boolean;
+    removeFromGroups?: boolean;
+    keepReferralData?: boolean;
+  } = {}): Promise<void> {
+    try {
+      console.log('Deactivating user account:', userId, 'with options:', options);
+      const timestamp = new Date().toISOString();
+
+      // Get user data first
+      const user = await this.getUserById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // 1. Deactivate user profile
+      await this._usersCollection.doc(userId).update({
+        isActive: false,
+        updatedAt: timestamp,
+        deactivatedAt: timestamp,
+      });
+
+      // 2. Handle groups if user is a member
+      if (options.removeFromGroups || options.deactivateGroups) {
+        const userGroups = await this.getUserGroups(userId);
+        
+        for (const group of userGroups) {
+          try {
+            if (group.createdBy === userId && options.deactivateGroups) {
+              // If user is creator and we want to deactivate groups
+              await this.deleteGroup(group.id);
+              console.log(`Deactivated group ${group.id} created by user ${userId}`);
+            } else if (options.removeFromGroups) {
+              // Remove user from groups (unless they're the creator)
+              if (group.createdBy !== userId) {
+                await this.removeGroupMember(group.id, userId);
+                console.log(`Removed user ${userId} from group ${group.id}`);
+              } else {
+                console.log(`Cannot remove user ${userId} from group ${group.id} - user is creator`);
+              }
+            }
+          } catch (groupError) {
+            console.error(`Error handling group ${group.id} during user deactivation:`, groupError);
+            // Continue with other groups even if one fails
+          }
+        }
+      }
+
+      // 3. Handle referral data
+      if (!options.keepReferralData) {
+        try {
+          // Deactivate referral document instead of deleting to maintain data integrity
+          await this._referralsCollection.doc(userId).update({
+            isActive: false,
+            deactivatedAt: timestamp,
+            updatedAt: timestamp,
+          });
+          console.log(`Deactivated referral data for user ${userId}`);
+        } catch (referralError) {
+          console.error('Error deactivating referral data:', referralError);
+          // Not critical, continue
+        }
+      }
+
+      // 4. Create final activity log
+      try {
+        await this.createActivity({
+          userId: userId,
+          userName: user.name,
+          type: 'group_joined', // Using existing type, could add 'account_deactivated' type later
+          title: 'Account deactivated',
+          description: 'User account has been deactivated',
+          metadata: {
+            deactivationOptions: options,
+            deactivatedAt: timestamp,
+          },
+        });
+      } catch (activityError) {
+        console.error('Error creating deactivation activity:', activityError);
+        // Not critical, continue
+      }
+
+      console.log('User account deactivated successfully:', userId);
+    } catch (error: any) {
+      console.error('Error deactivating user account:', error);
+      if (error.code === 'firestore/permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
+      throw new Error(error.message || 'Failed to deactivate user account');
     }
   }
 
@@ -673,6 +787,40 @@ class FirebaseService {
       };
 
       console.log('Group created successfully:', group.id);
+      
+      // Create activity log for group creation
+      try {
+        await this.createActivity({
+          userId: createdBy,
+          userName: creator.name,
+          type: 'group_created',
+          title: `Created group: ${groupData.name}`,
+          description: `New group with ${members.length} members`,
+          groupId: group.id,
+          groupName: groupData.name,
+        });
+        
+        // Create join activities for other members
+        for (const member of members) {
+          if (member.userId !== createdBy) {
+            await this.createActivity({
+              userId: member.userId,
+              userName: member.name,
+              type: 'group_joined',
+              title: `Joined group: ${groupData.name}`,
+              description: `Added to group by ${creator.name}`,
+              groupId: group.id,
+              groupName: groupData.name,
+              relatedUserId: createdBy,
+              relatedUserName: creator.name,
+            });
+          }
+        }
+      } catch (activityError) {
+        console.error('Error creating group activities:', activityError);
+        // Don't fail the group creation if activity logging fails
+      }
+      
       return group;
     } catch (error: any) {
       console.error('Error creating group:', error);
@@ -1137,6 +1285,26 @@ class FirebaseService {
       };
 
       console.log('Expense created successfully:', expense.id);
+      
+      // Create activity log for expense creation
+      try {
+        await this.createActivity({
+          userId: expenseData.paidBy.id,
+          userName: expenseData.paidBy.name,
+          type: 'expense_added',
+          title: `Added expense: ${expenseData.description}`,
+          description: `₹${expenseData.amount.toFixed(0)} expense added in ${group.name}`,
+          groupId: groupId,
+          groupName: group.name,
+          expenseId: expense.id,
+          expenseDescription: expenseData.description,
+          amount: expenseData.amount,
+        });
+      } catch (activityError) {
+        console.error('Error creating expense activity:', activityError);
+        // Don't fail the expense creation if activity logging fails
+      }
+      
       return expense;
     } catch (error: any) {
       console.error('Error creating expense:', error);
@@ -1357,6 +1525,25 @@ class FirebaseService {
       };
 
       console.log('Settlement created successfully:', docRef.id);
+      
+      // Create activity log for settlement creation
+      try {
+        await this.createActivity({
+          userId: settlement.fromUserId,
+          userName: settlement.fromUserName,
+          type: 'settlement_created',
+          title: `Marked payment as done`,
+          description: `₹${settlement.amount.toFixed(0)} payment to ${settlement.toUserName}`,
+          groupId: settlement.groupId,
+          amount: settlement.amount,
+          relatedUserId: settlement.toUserId,
+          relatedUserName: settlement.toUserName,
+        });
+      } catch (activityError) {
+        console.error('Error creating settlement activity:', activityError);
+        // Don't fail the settlement creation if activity logging fails
+      }
+      
       return createdSettlement;
     } catch (error) {
       console.error('Error creating settlement:', error);
@@ -1388,6 +1575,18 @@ class FirebaseService {
     try {
       const timestamp = new Date().toISOString();
       
+      // Get settlement details before updating for activity logging
+      const settlementDoc = await this._groupsCollection
+        .doc(groupId)
+        .collection('settlements')
+        .doc(settlementId)
+        .get();
+      
+      const settlement = settlementDoc.data() as Settlement;
+      if (!settlement) {
+        throw new Error('Settlement not found');
+      }
+      
       await this._groupsCollection
         .doc(groupId)
         .collection('settlements')
@@ -1399,6 +1598,24 @@ class FirebaseService {
         });
 
       console.log('Settlement confirmed successfully:', settlementId);
+      
+      // Create activity log for settlement confirmation
+      try {
+        await this.createActivity({
+          userId: settlement.toUserId,
+          userName: settlement.toUserName,
+          type: 'settlement_confirmed',
+          title: `Confirmed payment received`,
+          description: `₹${settlement.amount.toFixed(0)} payment from ${settlement.fromUserName}`,
+          groupId: groupId,
+          amount: settlement.amount,
+          relatedUserId: settlement.fromUserId,
+          relatedUserName: settlement.fromUserName,
+        });
+      } catch (activityError) {
+        console.error('Error creating settlement confirmation activity:', activityError);
+        // Don't fail the confirmation if activity logging fails
+      }
     } catch (error) {
       console.error('Error confirming settlement:', error);
       throw new Error('Failed to confirm settlement');
@@ -1438,6 +1655,284 @@ class FirebaseService {
     } catch (error) {
       console.error('Error fetching active settlements:', error);
       throw new Error('Failed to fetch active settlements');
+    }
+  }
+
+  async getAllUserSettlements(userId: string): Promise<Settlement[]> {
+    try {
+      console.log('Getting all settlements for user:', userId);
+      
+      // First get all groups user is part of
+      const userGroups = await this.getUserGroups(userId);
+      const groupIds = userGroups.map(group => group.id);
+      
+      if (groupIds.length === 0) {
+        return [];
+      }
+      
+      // Get all settlements from all groups in parallel
+      const settlementPromises = groupIds.map(async (groupId) => {
+        try {
+          const snapshot = await this._groupsCollection
+            .doc(groupId)
+            .collection('settlements')
+            .get();
+          
+          return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          } as Settlement));
+        } catch (error) {
+          console.error(`Error fetching settlements for group ${groupId}:`, error);
+          return [];
+        }
+      });
+      
+      const allGroupSettlements = await Promise.all(settlementPromises);
+      const allSettlements = allGroupSettlements.flat();
+      
+      // Filter settlements that involve the user
+      const userSettlements = allSettlements.filter(settlement => 
+        settlement.fromUserId === userId || settlement.toUserId === userId
+      );
+      
+      // Sort by creation date (most recent first)
+      userSettlements.sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        return bTime - aTime;
+      });
+      
+      console.log(`Found ${userSettlements.length} settlements for user across ${groupIds.length} groups`);
+      return userSettlements;
+    } catch (error) {
+      console.error('Error fetching all user settlements:', error);
+      throw new Error('Failed to fetch payment history');
+    }
+  }
+
+  // ========================================
+  // ACTIVITY MANAGEMENT METHODS
+  // ========================================
+
+  /**
+   * Create a new activity log entry
+   */
+  async createActivity(activityData: Omit<Activity, 'id' | 'createdAt'>): Promise<Activity> {
+    try {
+      const timestamp = new Date().toISOString();
+      
+      const activity: Omit<Activity, 'id'> = {
+        ...activityData,
+        createdAt: timestamp,
+      };
+
+      const docRef = await this._activitiesCollection.add(activity);
+      
+      console.log('Activity created successfully:', docRef.id);
+      
+      return {
+        id: docRef.id,
+        ...activity,
+      };
+    } catch (error) {
+      console.error('Error creating activity:', error);
+      throw new Error('Failed to create activity');
+    }
+  }
+
+  /**
+   * Delete an activity
+   */
+  async deleteActivity(activityId: string): Promise<void> {
+    try {
+      console.log('Deleting activity:', activityId);
+      
+      await this._activitiesCollection.doc(activityId).delete();
+      
+      console.log('Activity deleted successfully:', activityId);
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      throw new Error('Failed to delete activity');
+    }
+  }
+
+  /**
+   * Get recent activities for a user
+   */
+  async getUserActivities(userId: string, limit: number = 50): Promise<Activity[]> {
+    try {
+      console.log('Getting activities for user:', userId);
+      
+      const snapshot = await this._activitiesCollection
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+
+      const activities: Activity[] = [];
+      snapshot.docs.forEach(doc => {
+        activities.push({
+          id: doc.id,
+          ...doc.data(),
+        } as Activity);
+      });
+
+      console.log(`Found ${activities.length} activities for user:`, userId);
+      return activities;
+    } catch (error) {
+      console.error('Error getting user activities:', error);
+      
+      // If indexing fails, try without orderBy
+      try {
+        console.log('Retrying activities query without orderBy...');
+        const snapshot = await this._activitiesCollection
+          .where('userId', '==', userId)
+          .limit(limit)
+          .get();
+
+        const activities: Activity[] = [];
+        snapshot.docs.forEach(doc => {
+          activities.push({
+            id: doc.id,
+            ...doc.data(),
+          } as Activity);
+        });
+
+        // Sort on client side
+        activities.sort((a, b) => {
+          const aTime = new Date(a.createdAt).getTime();
+          const bTime = new Date(b.createdAt).getTime();
+          return bTime - aTime;
+        });
+
+        console.log(`Found ${activities.length} activities (client sorted) for user:`, userId);
+        return activities;
+      } catch (fallbackError) {
+        console.error('Fallback activities query also failed:', fallbackError);
+        return [];
+      }
+    }
+  }
+
+  /**
+   * Get activities for multiple groups (for activity feed)
+   */
+  async getGroupActivities(groupIds: string[], limit: number = 30): Promise<Activity[]> {
+    try {
+      if (groupIds.length === 0) return [];
+
+      console.log('Getting activities for groups:', groupIds);
+      
+      const promises = groupIds.map(groupId =>
+        this._activitiesCollection
+          .where('groupId', '==', groupId)
+          .orderBy('createdAt', 'desc')
+          .limit(Math.ceil(limit / groupIds.length))
+          .get()
+          .catch(error => {
+            console.log(`Failed to get activities for group ${groupId}:`, error);
+            return null;
+          })
+      );
+
+      const snapshots = await Promise.all(promises);
+      const activities: Activity[] = [];
+
+      snapshots.forEach(snapshot => {
+        if (snapshot) {
+          snapshot.docs.forEach(doc => {
+            activities.push({
+              id: doc.id,
+              ...doc.data(),
+            } as Activity);
+          });
+        }
+      });
+
+      // Sort all activities by creation time
+      activities.sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        return bTime - aTime;
+      });
+
+      // Limit final results
+      const limitedActivities = activities.slice(0, limit);
+      
+      console.log(`Found ${limitedActivities.length} group activities`);
+      return limitedActivities;
+    } catch (error) {
+      console.error('Error getting group activities:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Helper method to create expense activity
+   */
+  async createExpenseActivity(
+    userId: string,
+    userName: string,
+    groupId: string,
+    groupName: string,
+    expenseId: string,
+    expenseDescription: string,
+    amount: number
+  ): Promise<void> {
+    try {
+      await this.createActivity({
+        userId,
+        userName,
+        type: 'expense_added',
+        title: `You added "${expenseDescription}"`,
+        description: `Added expense "${expenseDescription}" worth ₹${amount.toFixed(0)} to ${groupName}`,
+        groupId,
+        groupName,
+        expenseId,
+        expenseDescription,
+        amount,
+      });
+    } catch (error) {
+      console.error('Error creating expense activity:', error);
+      // Don't throw error as this is not critical
+    }
+  }
+
+  /**
+   * Helper method to create settlement activity
+   */
+  async createSettlementActivity(
+    userId: string,
+    userName: string,
+    groupId: string,
+    groupName: string,
+    relatedUserId: string,
+    relatedUserName: string,
+    amount: number,
+    isConfirmation: boolean = false
+  ): Promise<void> {
+    try {
+      const type = isConfirmation ? 'settlement_confirmed' : 'settlement_created';
+      const title = isConfirmation 
+        ? `You confirmed payment from ${relatedUserName}`
+        : `You marked payment to ${relatedUserName}`;
+      
+      await this.createActivity({
+        userId,
+        userName,
+        type,
+        title,
+        description: `₹${amount.toFixed(0)} settlement ${isConfirmation ? 'confirmed' : 'created'} in ${groupName}`,
+        groupId,
+        groupName,
+        amount,
+        relatedUserId,
+        relatedUserName,
+      });
+    } catch (error) {
+      console.error('Error creating settlement activity:', error);
+      // Don't throw error as this is not critical
     }
   }
 }

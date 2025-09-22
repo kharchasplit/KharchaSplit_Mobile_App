@@ -35,16 +35,16 @@ export const FAQs: React.FC<FAQsProps> = ({ onClose }) => {
         <Text style={styles.text}>Frequently Asked Questions</Text>
 
         <View style={styles.faqItem}>
-          <Text style={styles.question}>1. How does Splitzy work?</Text>
+          <Text style={styles.question}>1. How does KharchaSplit work?</Text>
           <Text style={styles.answer}>
-            Splitzy lets you manage group expenses and split bills easily with
+            KharchaSplit lets you manage group expenses and split bills easily with
             friends or roommates.
           </Text>
         </View>
 
         <View style={styles.faqItem}>
           <Text style={styles.question}>
-            2. Can I use Splitzy without an account?
+            2. Can I use KharchaSplit without an account?
           </Text>
           <Text style={styles.answer}>
             No, you need to create an account to track and sync your expenses

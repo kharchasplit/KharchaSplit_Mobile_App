@@ -9,28 +9,33 @@ import {
   Modal,
   Alert,
   TextInput,
+  ActivityIndicator,
   // --- RESPONSIVE ---
   useWindowDimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 // --- RESPONSIVE ---
 import { typography } from '../utils/typography'; // Assuming path is correct
+import { firebaseService } from '../services/firebaseService';
 
 type DeleteAccountProps = {
   onClose: () => void;
 };
 
 const CONSEQUENCES = [
-  { id: 1, text: 'Delete all your expense data' },
-  { id: 2, text: 'Remove you from all groups' },
-  { id: 3, text: 'Delete your profile permanently' },
-  { id: 4, text: 'Cannot be recovered' },
+  { id: 1, text: 'Your account will be deactivated (but data preserved for security)' },
+  { id: 2, text: 'You will be removed from all active groups' },
+  { id: 3, text: 'Your profile will no longer be visible to other users' },
+  { id: 4, text: 'You cannot login or access the app anymore' },
+  { id: 5, text: 'Historical data remains for group transaction integrity' },
 ] as const;
 
 export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
   const { colors } = useTheme();
+  const { user, logout } = useAuth();
 
   // --- RESPONSIVE SETUP ---
   const { width: screenWidth } = useWindowDimensions();
@@ -54,8 +59,15 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
   // --- END RESPONSIVE SETUP ---
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [password, setPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  
+  // Get user's phone number (remove country code and get last 10 digits)
+  const userPhoneNumber = user?.phoneNumber?.replace(/\D/g, '').slice(-10) || '';
 
   // --- STYLE FIX & RESPONSIVE ---
   // Pass all dependencies to createStyles and useMemo
@@ -64,45 +76,137 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
   }, [colors, scale, scaledFontSize]);
   // --- END FIX ---
 
-  const validatePassword = useCallback((pwd: string) => {
-    if (!pwd.trim()) {
-      return 'Password is required';
+
+  const validateOtp = useCallback((otpValue: string) => {
+    if (!otpValue.trim()) {
+      return 'OTP is required';
     }
-    if (pwd.length < 6) {
-      return 'Password must be at least 6 characters';
+    if (otpValue.length !== 6) {
+      return 'OTP must be 6 digits';
     }
     return '';
   }, []);
 
-  const handlePasswordChange = useCallback(
+
+  const handleOtpChange = useCallback(
     (text: string) => {
-      setPassword(text);
-      if (passwordError) {
-        setPasswordError('');
+      // Only allow digits and limit to 6
+      const cleaned = text.replace(/\D/g, '').slice(0, 6);
+      setOtp(cleaned);
+      if (otpError) {
+        setOtpError('');
       }
     },
-    [passwordError],
+    [otpError],
   );
 
-  const handleDeleteAccount = useCallback(() => {
-    const error = validatePassword(password);
-    if (error) {
-      setPasswordError(error);
+  const handleSendOtp = useCallback(async () => {
+    if (!userPhoneNumber) {
+      Alert.alert('Error', 'No phone number found for your account.');
       return;
     }
-    setShowConfirmModal(true);
-  }, [password, validatePassword]);
 
-  const confirmDelete = useCallback(() => {
-    setShowConfirmModal(false);
-    Alert.alert('Account Deleted', 'Your account has been permanently deleted.', [
-      { text: 'OK', onPress: onClose },
-    ]);
-  }, [onClose]);
+    setSendingOtp(true);
+    try {
+      // Here you would integrate with your OTP service
+      // For now, we'll simulate the OTP sending
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+      
+      setOtpSent(true);
+      setCountdown(60); // Start 60 second countdown
+      
+      // Start countdown timer
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      Alert.alert('OTP Sent', `Verification code sent to +91${userPhoneNumber}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+    } finally {
+      setSendingOtp(false);
+    }
+  }, [userPhoneNumber]);
+
+  const handleDeleteAccount = useCallback(() => {
+    if (!otpSent) {
+      handleSendOtp();
+      return;
+    }
+
+    const otpErr = validateOtp(otp);
+    if (otpErr) {
+      setOtpError(otpErr);
+      return;
+    }
+
+    // In a real app, you would verify the OTP with your backend
+    // For now, we'll accept any 6-digit OTP
+    setShowConfirmModal(true);
+  }, [otp, otpSent, validateOtp, handleSendOtp]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'User information not found.');
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      // Call Firebase service to deactivate account
+      await firebaseService.deactivateUserAccount(user.id);
+      
+      setShowConfirmModal(false);
+      
+      Alert.alert(
+        '✅ Account Deactivated', 
+        'Your account has been successfully deactivated. You have been logged out and cannot access the app anymore.\n\nNote: Your historical data is preserved for security and group transaction integrity.',
+        [
+          { 
+            text: 'OK', 
+            onPress: async () => {
+              try {
+                await logout();
+                onClose();
+              } catch (error) {
+                console.error('Logout error after account deletion:', error);
+                onClose();
+              }
+            }
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      setIsDeleting(false);
+      
+      Alert.alert(
+        '❌ Error', 
+        error.message || 'Failed to delete account. Please try again or contact support.',
+        [
+          { text: 'OK', style: 'default' }
+        ]
+      );
+    }
+  }, [user?.id, logout, onClose]);
 
   const cancelDelete = useCallback(() => {
     setShowConfirmModal(false);
-    setPasswordError('');
+    setOtpError('');
+  }, []);
+
+  const resetForm = useCallback(() => {
+    setOtp('');
+    setOtpError('');
+    setOtpSent(false);
+    setCountdown(0);
   }, []);
 
   // Use style from useMemo
@@ -113,10 +217,12 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
     </View>
   );
 
-  const isDeleteDisabled = useMemo(
-    () => !password.trim() || password.length < 6,
-    [password],
-  );
+  const isDeleteDisabled = useMemo(() => {
+    if (!otpSent) {
+      return false; // Send OTP button is always enabled
+    }
+    return !otp.trim() || otp.length !== 6;
+  }, [otp, otpSent]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -138,9 +244,9 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
         </View>
 
         {/* Warning Text */}
-        <Text style={styles.warningTitle}>Delete Your Account</Text>
+        <Text style={styles.warningTitle}>Deactivate Your Account</Text>
         <Text style={styles.warningText}>
-          Deleting your account is a permanent action and cannot be undone. This will:
+          Deactivating your account will disable access while preserving data for security. This will:
         </Text>
 
         {/* Consequences List */}
@@ -150,33 +256,71 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
           ))}
         </View>
 
-        <Text style={styles.warningText}>Enter your Password to continue</Text>
+        <Text style={styles.warningText}>Verify your phone number to confirm account deactivation:</Text>
+        
+        {/* Phone Number Display - Read Only */}
         <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.textInput, passwordError ? styles.textInputError : null]}
-            placeholder="Enter Your Password"
-            placeholderTextColor={colors.secondaryText}
-            value={password}
-            onChangeText={handlePasswordChange}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+          <Text style={styles.inputLabel}>Your registered phone number</Text>
+          <View style={styles.phoneDisplayContainer}>
+            <Text style={styles.countryCode}>+91</Text>
+            <Text style={styles.phoneDisplay}>{userPhoneNumber}</Text>
+          </View>
         </View>
+
+        {/* OTP Input - Only show after OTP is sent */}
+        {otpSent && (
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Enter verification code</Text>
+            <TextInput
+              style={[styles.textInput, otpError ? styles.textInputError : null]}
+              placeholder="Enter 6-digit OTP"
+              placeholderTextColor={colors.secondaryText}
+              value={otp}
+              onChangeText={handleOtpChange}
+              keyboardType="numeric"
+              maxLength={6}
+            />
+            {otpError ? <Text style={styles.errorText}>{otpError}</Text> : null}
+            
+            {/* Resend OTP */}
+            <View style={styles.resendContainer}>
+              {countdown > 0 ? (
+                <Text style={styles.countdownText}>Resend OTP in {countdown}s</Text>
+              ) : (
+                <TouchableOpacity onPress={handleSendOtp} disabled={sendingOtp}>
+                  <Text style={styles.resendText}>
+                    {sendingOtp ? 'Sending...' : 'Resend OTP'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Delete Button */}
         <TouchableOpacity
-          style={[styles.deleteButton, isDeleteDisabled && styles.deleteButtonDisabled]}
+          style={[styles.deleteButton, (isDeleteDisabled || isDeleting) && styles.deleteButtonDisabled]}
           onPress={handleDeleteAccount}
-          disabled={isDeleteDisabled}>
-          <Text
-            style={[
-              styles.deleteButtonText,
-              isDeleteDisabled && styles.deleteButtonTextDisabled,
-            ]}>
-            Delete My Account
-          </Text>
+          disabled={isDeleteDisabled || isDeleting}>
+          {isDeleting ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={[styles.deleteButtonText, { marginLeft: scale(8) }]}>Deactivating...</Text>
+            </View>
+          ) : sendingOtp ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={[styles.deleteButtonText, { marginLeft: scale(8) }]}>Sending OTP...</Text>
+            </View>
+          ) : (
+            <Text
+              style={[
+                styles.deleteButtonText,
+                isDeleteDisabled && styles.deleteButtonTextDisabled,
+              ]}>
+              {otpSent ? 'Verify & Deactivate Account' : 'Send OTP'}
+            </Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -191,14 +335,25 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
             <Ionicons name="warning" size={scale(40)} color={colors.error} />
             <Text style={styles.modalTitle}>Are you absolutely sure?</Text>
             <Text style={styles.modalText}>
-              This action cannot be undone. Your account and all data will be permanently deleted.
+              This action will deactivate your account and log you out. You won't be able to access the app, but your data will be preserved for security purposes.
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelButton} onPress={cancelDelete}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmDeleteButton} onPress={confirmDelete}>
-                <Text style={styles.confirmDeleteButtonText}>Delete Account</Text>
+              <TouchableOpacity 
+                style={[styles.confirmDeleteButton, isDeleting && styles.confirmDeleteButtonDisabled]} 
+                onPress={confirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <View style={styles.modalLoadingContainer}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={[styles.confirmDeleteButtonText, { marginLeft: scale(6) }]}>Deactivating...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.confirmDeleteButtonText}>Deactivate Account</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -335,4 +490,73 @@ const createStyles = (
       alignItems: 'center',
     },
     confirmDeleteButtonText: { color: '#FFFFFF', fontSize: fonts.button, fontWeight: '600' },
+    confirmDeleteButtonDisabled: { backgroundColor: colors.inactiveIcon, opacity: 0.6 },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalLoadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    inputLabel: {
+      fontSize: fonts.caption,
+      color: colors.primaryText,
+      marginBottom: scale(8),
+      fontWeight: '500',
+    },
+    phoneDisplayContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.secondaryText + '40',
+      borderRadius: scale(8),
+      backgroundColor: colors.cardBackground + '60',
+    },
+    phoneInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.secondaryText,
+      borderRadius: scale(8),
+      backgroundColor: colors.cardBackground,
+    },
+    countryCode: {
+      fontSize: fonts.body,
+      color: colors.primaryText,
+      paddingHorizontal: scale(12),
+      paddingVertical: scale(14),
+      borderRightWidth: 1,
+      borderRightColor: colors.secondaryText,
+    },
+    phoneDisplay: {
+      flex: 1,
+      paddingHorizontal: scale(12),
+      paddingVertical: scale(14),
+      fontSize: fonts.body,
+      color: colors.primaryText,
+      fontWeight: '600',
+    },
+    phoneInput: {
+      flex: 1,
+      paddingHorizontal: scale(12),
+      paddingVertical: scale(14),
+      fontSize: fonts.body,
+      color: colors.primaryText,
+    },
+    resendContainer: {
+      alignItems: 'center',
+      marginTop: scale(12),
+    },
+    countdownText: {
+      fontSize: fonts.caption,
+      color: colors.secondaryText,
+    },
+    resendText: {
+      fontSize: fonts.caption,
+      color: colors.primaryButton,
+      fontWeight: '600',
+    },
   });

@@ -20,7 +20,7 @@ export const ContactSupport: React.FC<ContactSupportProps> = ({ onClose }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const handleEmailPress = () => {
-    Linking.openURL('mailto:support@splitzy.in');
+    Linking.openURL('mailto:support@kharchasplit.in');
   };
 
   return (
@@ -49,7 +49,7 @@ export const ContactSupport: React.FC<ContactSupportProps> = ({ onClose }) => {
               color={colors.activeIcon}
               style={{ marginRight: 8 }}
             />
-            <Text style={styles.emailText}>support@splitzy.in</Text>
+            <Text style={styles.emailText}>support@kharchasplit.in</Text>
           </View>
         </TouchableOpacity>
       </ScrollView>
