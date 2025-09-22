@@ -350,6 +350,11 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       await processContactsWithRegistration(contactsList);
       
       setContactsLoading(false);
+
+      // Process contacts in background (non-blocking)
+      setTimeout(() => {
+        filterContactsByFirebaseUsers(contactsList);
+      }, 50); // Small delay to ensure UI updates first
     } catch (error) {
       console.error('Error loading contacts:', error);
       Alert.alert('Error', 'Failed to load contacts.');
@@ -367,7 +372,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       contactsList.forEach(contact => {
         if (contact.phoneNumbers?.length > 0 && !processedContactIds.has(contact.recordID)) {
           processedContactIds.add(contact.recordID);
-          
+
           const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
           
           if (primaryPhone.length === 10) {
