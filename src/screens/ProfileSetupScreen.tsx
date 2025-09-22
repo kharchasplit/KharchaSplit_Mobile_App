@@ -62,7 +62,6 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       const { firebaseService } = await import('../services/firebaseService');
       const isValid = await firebaseService.validateReferralCode(formattedCode);
       setReferralValid(isValid);
-      console.log('Referral code validation:', formattedCode, isValid ? 'VALID' : 'INVALID');
     } catch (error) {
       console.error('Error validating referral code:', error);
       setReferralValid(false);
@@ -130,7 +129,6 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       // Only add profileImage if it exists (base64 format)
       if (profileImage) {
         userData.profileImage = profileImage.replace(/^data:image\/[a-z]+;base64,/, ''); // Remove data URL prefix if present
-        console.log('Profile image size:', userData.profileImage.length, 'characters');
       }
 
       const userProfile = await firebaseService.createUser(userData);
@@ -138,13 +136,10 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       // Apply referral code if provided and valid
       if (referralCode.trim() && referralValid === true) {
         try {
-          console.log('Applying referral code:', referralCode, 'to user:', userProfile.id);
           const applied = await firebaseService.applyReferralCode(userProfile.id, referralCode.trim());
           if (applied) {
-            console.log('Referral code applied successfully');
             Alert.alert('Success', `Profile created successfully! Referral code ${referralCode} has been applied.`);
           } else {
-            console.log('Referral code application failed');
             Alert.alert('Success', 'Profile created successfully! However, the referral code could not be applied.');
           }
         } catch (referralError) {
@@ -161,8 +156,6 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
 
       // Update auth context to trigger navigation to main app
       login(userProfile);
-
-      console.log('User profile created:', userProfile.id);
     } catch (error) {
       Alert.alert('Error', 'Failed to create profile. Please try again.');
       console.error('Save profile error:', error);

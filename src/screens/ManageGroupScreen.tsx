@@ -83,14 +83,12 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
 
   const loadGroupData = async () => {
     if (!group?.id) {
-      console.log('⚠️ Missing group data');
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      console.log('📂 Loading group data for:', group.id);
 
       // Load real Firebase data
       const groupDetails = await firebaseService.getGroupById(group.id);
@@ -117,7 +115,6 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
           currentUserMember?.role === 'admin'
         );
         
-        console.log(`✅ Loaded ${groupDetails.members.length} members`);
       }
     } catch (error) {
       console.error('❌ Error loading data:', error);
@@ -165,7 +162,6 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
   const uploadCoverImage = async (asset: any) => {
     setUploadingImage(true);
     try {
-      console.log('🖼️ Processing cover image for group:', group?.id);
       
       if (!asset.base64) {
         Alert.alert('Error', 'Failed to process image. Please try again.');
@@ -186,7 +182,6 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
       const imageDataUri = `data:${mimeType};base64,${asset.base64}`;
       
       setGroupData(prev => ({ ...prev, coverImage: imageDataUri }));
-      console.log('✅ Cover image updated successfully');
     } catch (error) {
       console.error('Error processing image:', error);
       Alert.alert('Error', 'Failed to process image. Please try again.');
@@ -206,7 +201,6 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
           style: 'destructive',
           onPress: () => {
             setGroupData(prev => ({ ...prev, coverImage: null }));
-            console.log('🗑️ Cover image removed from local state');
           }
         }
       ]
@@ -254,7 +248,6 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
 
     setSaving(true);
     try {
-      console.log('💾 Saving group changes:', groupData);
       
       // Prepare update data
       const updateData: any = {
@@ -274,11 +267,6 @@ export const ManageGroupScreen: React.FC<ManageGroupScreenProps> = ({ route, nav
         updateData.coverImageBase64 = null;
       }
 
-      console.log('💾 Updating group with data:', {
-        name: updateData.name,
-        description: updateData.description,
-        hasImage: !!updateData.coverImageBase64
-      });
 
       // Update group in Firebase
       await firebaseService.updateGroup(group.id, updateData);

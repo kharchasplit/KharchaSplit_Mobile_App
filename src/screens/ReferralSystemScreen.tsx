@@ -42,7 +42,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
 
   const loadReferralData = useCallback(async () => {
     if (!user) {
-      console.log('No user found, cannot load referral data');
       setLoading(false);
       return;
     }
@@ -50,7 +49,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
     setLoading(true);
 
     // TEMPORARY: Skip Firebase referral collection completely and use fallback approach
-    console.log('Using fallback approach to avoid Firebase referral collection permission issues');
 
     try {
       // Check if user already has a referral code in their profile
@@ -59,23 +57,18 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
       // If user doesn't have a referral code, generate one and save to Firebase
       if (!referralCode) {
         referralCode = generateDefaultReferralCode();
-        console.log('Generated new referral code for user:', referralCode);
 
         try {
           // Save the generated referral code to user profile in Firebase
           const updatedUser = await firebaseService.updateUser(user.id, { referralCode });
-          console.log('Referral code saved to user profile in Firebase');
 
           // Update local storage and AuthContext to include the new referral code
           await userStorage.saveUser(updatedUser);
           login(updatedUser);
-          console.log('User updated in AuthContext with new referral code');
         } catch (updateError) {
           console.error('Failed to save referral code to Firebase:', updateError);
           // Continue with local display even if Firebase save fails
         }
-      } else {
-        console.log('Using existing referral code from user profile:', referralCode);
       }
 
       // Try to load referral history directly from users collection as fallback
@@ -85,7 +78,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
       let pendingReferrals = 0;
 
       try {
-        console.log('Loading referral history directly from users collection as fallback');
         const referredUsersSnapshot = await firebaseService.usersCollection
           .where('referredBy', '==', user.id)
           .where('isActive', '==', true)
@@ -109,12 +101,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
         successfulReferrals = referralHistory.filter(r => r.status === 'completed').length;
         pendingReferrals = referralHistory.filter(r => r.status === 'pending').length;
 
-        console.log('Loaded referral history from users collection:', {
-          totalReferrals,
-          successfulReferrals,
-          pendingReferrals,
-          historyCount: referralHistory.length
-        });
       } catch (historyError) {
         console.error('Failed to load referral history from users collection:', historyError);
         // Keep default empty values
@@ -133,11 +119,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
       };
 
       setReferralData(defaultReferralData);
-      console.log('Default referral data set with code and history:', {
-        code: referralCode,
-        totalReferrals,
-        historyCount: referralHistory.length
-      });
     } catch (fallbackError) {
       console.error('Error in fallback referral data loading:', fallbackError);
 
@@ -154,7 +135,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
       };
 
       setReferralData(basicReferralData);
-      console.log('Set basic referral data as last resort');
     } finally {
       setLoading(false);
     }
@@ -182,7 +162,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
     try {
       Clipboard.setString(referralData.referralCode);
       Alert.alert('Copied!', 'Referral code copied to clipboard');
-      console.log('Referral code copied to clipboard:', referralData.referralCode);
     } catch (error) {
       console.error('Error copying to clipboard:', error);
     }
@@ -197,7 +176,6 @@ export const ReferralSystemScreen: React.FC<Props> = ({ onClose }) => {
         message: shareMessage,
         title: 'Join KharchaSplit with my referral code!',
       });
-      console.log('Referral code shared:', referralData.referralCode);
     } catch (error) {
       console.error('Error sharing referral code:', error);
     }

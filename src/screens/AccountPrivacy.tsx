@@ -42,21 +42,16 @@ export const Biometrics: React.FC<BiometricsProps> = ({ onClose }) => {
   useEffect(() => {
     const initializeBiometrics = async () => {
       try {
-        console.log('AccountPrivacy - Initializing biometrics...');
-
         // Use the new BiometricUtils for proper detection
         const info = await BiometricUtils.getBiometricInfo();
-        console.log('AccountPrivacy - Biometric info detected:', info);
 
         setBiometricInfo(info);
 
         // Load saved biometric state
         const storedState = await AsyncStorage.getItem('biometricEnabled');
-        console.log('AccountPrivacy - Stored biometric enabled state:', storedState);
 
         if (storedState === 'true' && info.available) {
           setBiometricEnabled(true);
-          console.log('AccountPrivacy - Biometric enabled in UI');
         }
       } catch (error) {
         console.error('AccountPrivacy - Error checking biometric availability:', error);
@@ -78,13 +73,9 @@ export const Biometrics: React.FC<BiometricsProps> = ({ onClose }) => {
 
     if (!biometricEnabled) {
       try {
-        console.log('AccountPrivacy - Prompting for biometric authentication with:', biometricInfo);
-
         const result = await BiometricUtils.authenticateWithBiometrics(
           `Authenticate with ${biometricInfo.displayName}`
         );
-
-        console.log('AccountPrivacy - Authentication result:', result);
 
         if (result.success) {
           setBiometricEnabled(true);
@@ -95,10 +86,8 @@ export const Biometrics: React.FC<BiometricsProps> = ({ onClose }) => {
             'Success',
             `${biometricInfo.displayName} authentication enabled successfully!`
           );
-          console.log('AccountPrivacy - Biometric authentication enabled');
         } else {
           Alert.alert('Authentication Cancelled', 'Biometric setup was cancelled.');
-          console.log('AccountPrivacy - Biometric authentication cancelled:', result.error);
         }
       } catch (error) {
         console.error('AccountPrivacy - Biometric authentication error:', error);
@@ -116,7 +105,6 @@ export const Biometrics: React.FC<BiometricsProps> = ({ onClose }) => {
         'Disabled',
         `${biometricInfo.displayName} authentication has been disabled.`
       );
-      console.log('AccountPrivacy - Biometric authentication disabled');
     }
   };
 

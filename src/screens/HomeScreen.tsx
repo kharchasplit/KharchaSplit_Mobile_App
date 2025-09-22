@@ -171,13 +171,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const loadGroupsFromFirebase = async () => {
     if (!user) {
-      console.log('No user authenticated, skipping group load');
       return;
     }
 
     try {
       setGroupsLoading(true);
-      console.log('Loading groups for user:', user.id);
       
       const userGroups = await firebaseService.getUserGroups(user.id);
       setFirebaseGroups(userGroups);
@@ -192,7 +190,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           try {
             // Get expenses for this group
             const groupExpenses = await firebaseService.getGroupExpenses(group.id);
-            console.log(`Group ${group.name} has ${groupExpenses.length} expenses`);
             
             // Calculate user's balance in this group
             const balance = calculateUserGroupBalance(groupExpenses, user.id, group.members);
@@ -225,19 +222,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       
       // Calculate overall balance
       calculateOverallBalance(convertedGroups);
-      
-      console.log(`Loaded ${userGroups.length} groups from Firebase`);
     } catch (error: any) {
       console.error('Error loading groups from Firebase:', error);
       
       // Show user-friendly error message for specific cases
       if (error.message.includes('index required')) {
-        console.log('Database configuration needed - using fallback');
         // For now, keep existing groups and don't show error to user
       } else if (error.message.includes('permission denied')) {
-        console.log('Permission denied - check Firebase rules');
-      } else {
-        console.log('General error loading groups:', error.message);
+        // Permission denied - check Firebase rules
       }
       
       // Keep existing groups on error - don't clear the state
@@ -295,7 +287,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const handleCloseCreateGroup = () => setShowCreateGroup(false);
 
   const handleSaveNewGroup = (newGroup: FirebaseGroup) => {
-    console.log('New group created:', newGroup);
     
     // Convert Firebase group to legacy format for display
     const transformedGroup: Group = {
