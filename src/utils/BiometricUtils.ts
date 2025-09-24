@@ -14,7 +14,6 @@ export class BiometricUtils {
   static async getBiometricInfo(): Promise<BiometricInfo> {
     try {
       const { available, biometryType } = await this.rnBiometrics.isSensorAvailable();
-      console.log('BiometricUtils - Raw biometry data:', { available, biometryType, platform: Platform.OS });
 
       if (!available) {
         return {
@@ -79,7 +78,6 @@ export class BiometricUtils {
               icon: 'shield-checkmark',
             };
           default:
-            console.log('Unknown Android biometric type:', biometryType);
             return {
               available: true,
               type: 'Biometrics',
@@ -107,7 +105,6 @@ export class BiometricUtils {
         return { success: false, error: 'Biometric authentication not available' };
       }
 
-      console.log('BiometricUtils - Attempting authentication with type:', biometricInfo.type);
 
       const promptMessage = message || `Authenticate with ${biometricInfo.displayName}`;
 
@@ -117,7 +114,6 @@ export class BiometricUtils {
         fallbackEnabled: true,
       });
 
-      console.log('BiometricUtils - Authentication result:', result);
       return result;
     } catch (error) {
       console.error('BiometricUtils - Authentication error:', error);

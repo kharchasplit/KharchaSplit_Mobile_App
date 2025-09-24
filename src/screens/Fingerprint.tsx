@@ -37,7 +37,6 @@ export const Fingerprint: React.FC<FingerprintProps> = ({ onClose }) => {
 
   const handleToggle = async () => {
     const { available, biometryType } = await rnBiometrics.isSensorAvailable();
-    console.log('Available:', available, 'Type:', biometryType);
 
     if (!available || biometryType !== BiometryTypes.TouchID) {
       Alert.alert('Fingerprint not available on this device');

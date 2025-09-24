@@ -24,7 +24,6 @@ export class ContactsPermissionHelper {
       const permission = this.getPermission();
       const result = await check(permission);
 
-      console.log(`ContactsPermissionHelper - ${Platform.OS} permission check result:`, result);
 
       switch (result) {
         case RESULTS.GRANTED:
@@ -79,12 +78,10 @@ export class ContactsPermissionHelper {
    */
   static async requestPermission(): Promise<ContactPermissionResult> {
     try {
-      console.log(`ContactsPermissionHelper - Requesting ${Platform.OS} contacts permission...`);
 
       const permission = this.getPermission();
       const result = await request(permission);
 
-      console.log(`ContactsPermissionHelper - ${Platform.OS} permission request result:`, result);
 
       switch (result) {
         case RESULTS.GRANTED:

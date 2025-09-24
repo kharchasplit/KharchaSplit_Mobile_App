@@ -38,8 +38,7 @@ export const BiometricProvider: React.FC<BiometricProviderProps> = ({ children }
         // Lock the app when it goes to background
         if (isBiometricEnabled) {
           setIsBiometricLocked(true);
-          console.log('App moved to background - biometric lock activated');
-        }
+          }
       }
     };
 
@@ -49,32 +48,23 @@ export const BiometricProvider: React.FC<BiometricProviderProps> = ({ children }
 
   const checkBiometricStatus = async () => {
     try {
-      console.log('Checking biometric status...');
-
       // Check if biometrics are enabled by user
       const biometricEnabled = await AsyncStorage.getItem('biometricEnabled');
-      console.log('Biometric enabled setting:', biometricEnabled);
 
       if (biometricEnabled === 'true') {
         // Check if device supports biometrics
         const { available, biometryType } = await rnBiometrics.isSensorAvailable();
-        console.log('Device biometric available:', available);
-        console.log('Device biometric type:', biometryType);
-
         if (available) {
           setIsBiometricEnabled(true);
           // Lock on app start if biometrics are enabled
           setIsBiometricLocked(true);
-          console.log(`Biometric authentication required on app start (Type: ${biometryType})`);
         } else {
           setIsBiometricEnabled(false);
           setIsBiometricLocked(false);
-          console.log('Biometrics not available on device');
         }
       } else {
         setIsBiometricEnabled(false);
         setIsBiometricLocked(false);
-        console.log('Biometric authentication not enabled by user');
       }
     } catch (error) {
       console.error('Error checking biometric status:', error);
@@ -84,7 +74,6 @@ export const BiometricProvider: React.FC<BiometricProviderProps> = ({ children }
   };
 
   const setBiometricLocked = (locked: boolean) => {
-    console.log('Setting biometric lock state:', locked);
     setIsBiometricLocked(locked);
   };
 

@@ -53,7 +53,6 @@ export const BiometricAuthScreen: React.FC<BiometricAuthScreenProps> = ({
   const initializeBiometrics = async () => {
     try {
       const info = await BiometricUtils.getBiometricInfo();
-      console.log('BiometricAuthScreen - Initialized with biometric info:', info);
       setBiometricInfo(info);
 
       // Auto-prompt if biometrics are available
@@ -71,19 +70,15 @@ export const BiometricAuthScreen: React.FC<BiometricAuthScreenProps> = ({
 
     setIsLoading(true);
     try {
-      console.log('BiometricAuthScreen - Attempting authentication with:', biometricInfo);
 
       const result = await BiometricUtils.authenticateWithBiometrics(
         `Unlock with ${biometricInfo.displayName}`
       );
 
-      console.log('BiometricAuthScreen - Authentication result:', result);
 
       if (result.success) {
-        console.log('BiometricAuthScreen - Authentication successful');
         onAuthenticated();
       } else {
-        console.log('BiometricAuthScreen - Authentication failed:', result.error);
         setIsLoading(false);
         // Don't call onAuthenticated - keep the lock screen
       }

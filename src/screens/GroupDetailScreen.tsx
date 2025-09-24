@@ -145,11 +145,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   const loadGroupData = useCallback(async () => {
     const groupId = currentGroup?.id || group?.id;
     if (!groupId) {
-      console.log('No group ID available for loading data');
       return;
     }
-
-    console.log('Loading dynamic group data for:', groupId);
     setLoading(true);
     
     try {
@@ -163,8 +160,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       ]);
 
       if (updatedGroup) {
-        console.log('Loaded group members:', updatedGroup.members.length);
-        console.log('Updated group cover image:', updatedGroup.coverImageBase64 ? 'present' : 'not present');
         
         // Update the main group object with fresh data (including cover image)
         const updatedGroupData = {
@@ -196,14 +191,11 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         );
       }
 
-      console.log('Loaded expenses:', groupExpenses.length);
       // Transform Firebase expenses to component format with proper member mapping
       const transformedExpenses = groupExpenses.map(expense => {
         // Map participants with proper member data
         const enrichedParticipants = expense.participants.map(participant => {
           const member = updatedGroup?.members.find(m => m.userId === participant.id);
-          console.log('Enriching participant:', participant.id, participant.name);
-          console.log('Found member:', member ? member.name : 'not found');
           
           return {
             ...participant,
@@ -241,9 +233,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       try {
         loadedFirebaseSettlements = await firebaseService.getGroupSettlements(currentGroup.id);
         setFirebaseSettlements(loadedFirebaseSettlements);
-        console.log('Loaded Firebase settlements:', loadedFirebaseSettlements.length);
       } catch (settlementError) {
-        console.error('Error loading settlements:', settlementError);
       }
 
       // Calculate balances dynamically, excluding paid settlements
@@ -259,12 +249,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       const calculatedSettlements = calculateOptimalSettlements(calculatedBalances, updatedGroup?.members || []);
       setSettlements(calculatedSettlements);
       
-      console.log('Paid settlements excluded from calculation:', paidSettlements.length);
-      console.log('New settlements calculated:', calculatedSettlements.length);
-
-      console.log('Group data loaded successfully');
     } catch (err) {
-      console.error('Error loading group data:', err);
       Alert.alert('Error', 'Failed to load group data');
     } finally {
       setLoading(false);
@@ -279,7 +264,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   // Refresh data when screen comes into focus (e.g., returning from ManageGroup)
   useFocusEffect(
     useCallback(() => {
-      console.log('Screen focused - refreshing group data');
       loadGroupData();
     }, [])
   );
@@ -341,7 +325,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                   ]
                 );
               } catch (error) {
-                console.error('Error completing group:', error);
                 Alert.alert('Error', 'Failed to complete group. Please try again.');
               } finally {
                 setLoading(false);
@@ -351,7 +334,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         ]
       );
     } catch (error) {
-      console.error('Error checking settlements:', error);
       Alert.alert('Error', 'Failed to check group status. Please try again.');
     }
   }, [balances, groupMembers, firebaseSettlements, currentGroup.id, navigation]);
@@ -390,7 +372,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
               
               Alert.alert('Success', 'Payment marked as pending. Waiting for confirmation from receiver.');
             } catch (error) {
-              console.error('Error creating settlement:', error);
               Alert.alert('Error', 'Failed to mark payment. Please try again.');
             } finally {
               setSettlementLoading(false);
@@ -427,7 +408,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
               
               Alert.alert('Success', 'Payment confirmed!');
             } catch (error) {
-              console.error('Error confirming settlement:', error);
               Alert.alert('Error', 'Failed to confirm payment. Please try again.');
             } finally {
               setSettlementLoading(false);
@@ -489,7 +469,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                   ]
                 );
               } catch (error) {
-                console.error('Error leaving group:', error);
                 Alert.alert('Error', 'Failed to leave group. Please try again.');
               } finally {
                 setLoading(false);
@@ -499,7 +478,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         ]
       );
     } catch (error) {
-      console.error('Error checking user settlements:', error);
       Alert.alert('Error', 'Failed to check settlement status. Please try again.');
     }
   }, [settlements, firebaseSettlements, balances, currentUserId, currentGroup.id, navigation]);
@@ -545,8 +523,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         if (balances[toUserId]) {
           balances[toUserId].net -= amount; // Reduce credit (move towards zero)
         }
-        
-        console.log(`Applied paid settlement: ${settlement.fromUserName} → ${settlement.toUserName} (₹${amount})`);
       }
     });
 
@@ -867,7 +843,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                       source={{uri: imageUri}} 
                       style={styles.balanceAvatar}
                       onError={() => {
-                        console.log('Failed to load balance avatar:', item.member.name);
                         debugImageData(item.member.avatar, `Balance ${item.member.name} Avatar`);
                       }}
                     />
@@ -918,7 +893,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                             source={{uri: imageUri}} 
                             style={styles.breakdownAvatar}
                             onError={() => {
-                              console.log('Failed to load breakdown avatar:', b.fromUser || b.toUser);
                               debugImageData(b.avatar, `Breakdown ${b.fromUser || b.toUser} Avatar`);
                             }}
                           />
@@ -943,12 +917,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   };
 
   const renderSettlement = () => {
-    // Debug logging
-    console.log('=== SETTLEMENT DEBUG ===');
-    console.log('Current User ID:', currentUserId);
-    console.log('Active Settlements:', settlements.length);
-    console.log('Total Firebase Settlements:', firebaseSettlements.length);
-    console.log('Paid Settlements:', firebaseSettlements.filter(s => s.status === 'paid').length);
     
     if (loading || groupMembers.length === 0) {
       return (
@@ -991,9 +959,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
           const isCurrentUserPayer = settlement.fromUserId === currentUserId;
           const isCurrentUserReceiver = settlement.toUserId === currentUserId;
           
-          // Debug logging for each settlement
-          console.log(`Settlement ${settlement.id}: ${settlement.from} → ${settlement.to} (₹${settlement.amount})`);
-          console.log(`Current user is payer: ${isCurrentUserPayer}, receiver: ${isCurrentUserReceiver}`);
           
           return (
             <View key={settlement.id} style={styles.settlementItem}>
@@ -1185,7 +1150,6 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                         source={{uri: imageUri}} 
                         style={styles.memberAvatar}
                         onError={() => {
-                          console.log('Failed to load member avatar:', member.name);
                           debugImageData(member.avatar, `Member ${member.name} Avatar`);
                         }}
                       />

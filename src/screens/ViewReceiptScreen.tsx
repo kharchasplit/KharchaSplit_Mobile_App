@@ -46,7 +46,6 @@ export const ViewReceiptScreen: React.FC<Props> = ({ route, navigation }) => {
   // Debug logging for receipt data
   React.useEffect(() => {
     debugImageData(receiptBase64, 'ViewReceiptScreen');
-    console.log('ViewReceiptScreen - Expense:', expenseDescription);
   }, [receiptBase64, expenseDescription]);
 
   // Ensure proper data URI format
@@ -175,11 +174,9 @@ export const ViewReceiptScreen: React.FC<Props> = ({ route, navigation }) => {
               source={{ uri: validReceiptUri || '' }}
               style={styles.receiptImage}
               onLoadStart={() => {
-                console.log('Image loading started for receipt');
                 setImageLoading(true);
               }}
               onLoadEnd={() => {
-                console.log('Image loading completed successfully');
                 setImageLoading(false);
               }}
               onError={(error) => {

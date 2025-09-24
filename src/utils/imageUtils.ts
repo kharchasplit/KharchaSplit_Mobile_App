@@ -268,20 +268,5 @@ export const ensureDataUri = (imageData: string | null | undefined, mimeType: st
  * Debug helper for image data
  */
 export const debugImageData = (imageData: string | null | undefined, label: string = 'Image'): void => {
-  if (!imageData) {
-    console.log(`${label}: No image data`);
-    return;
-  }
-
-  console.log(`${label} Debug:`, {
-    hasData: !!imageData,
-    length: imageData.length,
-    startsWithData: imageData.startsWith('data:'),
-    prefix: imageData.substring(0, 50),
-    isValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(
-      imageData.startsWith('data:') 
-        ? imageData.split(',')[1] || '' 
-        : imageData
-    )
-  });
+  // Debug function - implementation removed for production
 };

@@ -208,7 +208,6 @@ class FirebaseService {
         ...userDoc,
       };
 
-      console.log('User created successfully:', userProfile.id);
       return userProfile;
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -252,7 +251,6 @@ class FirebaseService {
         updatedAt: updateTimestamp,
       });
 
-      console.log('User updated successfully:', userId);
 
       // Return updated user profile
       const updatedUser = await this.getUserById(userId);
@@ -274,7 +272,6 @@ class FirebaseService {
         updatedAt: new Date().toISOString(),
       });
       
-      console.log('User deactivated successfully:', userId);
     } catch (error) {
       console.error('Error deactivating user:', error);
       throw new Error('Failed to deactivate user');
@@ -290,7 +287,6 @@ class FirebaseService {
     keepReferralData?: boolean;
   } = {}): Promise<void> {
     try {
-      console.log('Deactivating user account:', userId, 'with options:', options);
       const timestamp = new Date().toISOString();
 
       // Get user data first
@@ -315,14 +311,11 @@ class FirebaseService {
             if (group.createdBy === userId && options.deactivateGroups) {
               // If user is creator and we want to deactivate groups
               await this.deleteGroup(group.id);
-              console.log(`Deactivated group ${group.id} created by user ${userId}`);
             } else if (options.removeFromGroups) {
               // Remove user from groups (unless they're the creator)
               if (group.createdBy !== userId) {
                 await this.removeGroupMember(group.id, userId);
-                console.log(`Removed user ${userId} from group ${group.id}`);
               } else {
-                console.log(`Cannot remove user ${userId} from group ${group.id} - user is creator`);
               }
             }
           } catch (groupError) {
@@ -341,7 +334,6 @@ class FirebaseService {
             deactivatedAt: timestamp,
             updatedAt: timestamp,
           });
-          console.log(`Deactivated referral data for user ${userId}`);
         } catch (referralError) {
           console.error('Error deactivating referral data:', referralError);
           // Not critical, continue
@@ -366,7 +358,6 @@ class FirebaseService {
         // Not critical, continue
       }
 
-      console.log('User account deactivated successfully:', userId);
     } catch (error: any) {
       console.error('Error deactivating user account:', error);
       if (error.code === 'firestore/permission-denied') {
@@ -415,7 +406,6 @@ class FirebaseService {
    */
   async getExistingPhoneNumbers(phoneNumbers: string[]): Promise<string[]> {
     try {
-      console.log('Checking existence for phone numbers:', phoneNumbers.length);
       
       if (phoneNumbers.length === 0) {
         return [];
@@ -456,7 +446,6 @@ class FirebaseService {
         }
       }
 
-      console.log(`Found ${existingNumbers.length} existing users out of ${phoneNumbers.length} phone numbers`);
       return existingNumbers;
     } catch (error) {
       console.error('Error checking phone numbers existence:', error);
@@ -471,7 +460,6 @@ class FirebaseService {
    */
   async getUsersByPhoneNumbers(phoneNumbers: string[]): Promise<UserProfile[]> {
     try {
-      console.log('Getting user profiles for phone numbers:', phoneNumbers.length);
       
       if (phoneNumbers.length === 0) {
         return [];
@@ -512,7 +500,6 @@ class FirebaseService {
       // Wait for all batches to complete
       await Promise.all(batchPromises);
 
-      console.log(`Found ${users.length} user profiles`);
       return users;
     } catch (error) {
       console.error('Error getting users by phone numbers:', error);
@@ -539,7 +526,6 @@ class FirebaseService {
    */
   async getReferralData(userId: string): Promise<ReferralData> {
     try {
-      console.log('Getting referral data for user:', userId);
 
       // Get user's referral code
       const userDoc = await this.getUserById(userId);
@@ -553,7 +539,6 @@ class FirebaseService {
       if (!referralCode) {
         referralCode = this.generateReferralCode();
         await this.updateUser(userId, { referralCode });
-        console.log('Generated new referral code:', referralCode);
       }
 
       // Check if referral document exists
@@ -573,7 +558,6 @@ class FirebaseService {
         };
 
         await this._referralsCollection.doc(userId).set(newReferralData);
-        console.log('Created new referral document for user:', userId);
         return newReferralData;
       }
 
@@ -604,7 +588,6 @@ class FirebaseService {
    */
   private async refreshReferralHistory(userId: string, currentData: ReferralData): Promise<ReferralData> {
     try {
-      console.log('Refreshing referral history for user:', userId);
 
       // Query users who were referred by this user
       const referredUsersSnapshot = await this._usersCollection
@@ -651,11 +634,6 @@ class FirebaseService {
         updatedAt: updatedData.updatedAt,
       });
 
-      console.log('Referral history refreshed:', {
-        totalReferrals,
-        successfulReferrals,
-        pendingReferrals
-      });
 
       return updatedData;
     } catch (error) {
@@ -669,7 +647,6 @@ class FirebaseService {
    */
   async applyReferralCode(newUserId: string, referralCode: string): Promise<boolean> {
     try {
-      console.log('Applying referral code:', referralCode, 'for user:', newUserId);
 
       // Find user with this referral code
       const referrerSnapshot = await this._usersCollection
@@ -679,7 +656,6 @@ class FirebaseService {
         .get();
 
       if (referrerSnapshot.empty) {
-        console.log('Invalid referral code:', referralCode);
         return false;
       }
 
@@ -690,7 +666,6 @@ class FirebaseService {
       await this.updateUser(newUserId, { referredBy: referrerId });
 
       // Update referrer's referral statistics will be handled by refreshReferralHistory
-      console.log('Referral code applied successfully');
       return true;
     } catch (error) {
       console.error('Error applying referral code:', error);
@@ -723,7 +698,6 @@ class FirebaseService {
    */
   async createGroup(groupData: CreateGroup, createdBy: string): Promise<Group> {
     try {
-      console.log('Creating group:', groupData.name, 'by user:', createdBy);
       const timestamp = new Date().toISOString();
 
       // Get creator user data
@@ -786,7 +760,6 @@ class FirebaseService {
         ...groupDoc,
       };
 
-      console.log('Group created successfully:', group.id);
       
       // Create activity log for group creation
       try {
@@ -836,7 +809,6 @@ class FirebaseService {
    */
   async getUserGroups(userId: string): Promise<Group[]> {
     try {
-      console.log('Getting groups for user:', userId);
       
       // Try the simple query first
       let snapshot;
@@ -845,7 +817,6 @@ class FirebaseService {
           .where('isActive', '==', true)
           .get();
       } catch (indexError: any) {
-        console.log('Retrying with simpler query...');
         // If even this fails, try without any where clause
         snapshot = await this._groupsCollection.get();
       }
@@ -881,7 +852,7 @@ class FirebaseService {
                     };
                   }
                 } catch (memberError) {
-                  console.log(`Failed to enrich member ${member.userId}:`, memberError);
+                  // Silently continue on enrichment failure
                 }
                 return member; // Return original member if enrichment fails
               })
@@ -892,7 +863,7 @@ class FirebaseService {
               members: enrichedMembers,
             };
           } catch (groupError) {
-            console.log(`Failed to enrich group ${group.id}:`, groupError);
+            // Silently continue on enrichment failure
             return group; // Return original group if enrichment fails
           }
         })
@@ -905,7 +876,6 @@ class FirebaseService {
         return bTime - aTime;
       });
 
-      console.log(`Found and enriched ${enrichedGroups.length} groups for user:`, userId);
       return enrichedGroups.filter(group => !group.isCompleted); // Only return active groups
     } catch (error: any) {
       console.error('Error getting user groups:', error);
@@ -926,7 +896,6 @@ class FirebaseService {
    */
   async getCompletedGroups(userId: string): Promise<Group[]> {
     try {
-      console.log('Getting completed groups for user:', userId);
       
       // Try the simple query first
       let snapshot;
@@ -935,7 +904,6 @@ class FirebaseService {
           .where('isActive', '==', true)
           .get();
       } catch (indexError: any) {
-        console.log('Retrying with simpler query...');
         // If even this fails, try without any where clause
         snapshot = await this._groupsCollection.get();
       }
@@ -972,7 +940,7 @@ class FirebaseService {
                     };
                   }
                 } catch (memberError) {
-                  console.log(`Failed to enrich member ${member.userId}:`, memberError);
+                  // Silently continue on enrichment failure
                 }
                 return member; // Return original member if enrichment fails
               })
@@ -983,7 +951,7 @@ class FirebaseService {
               members: enrichedMembers,
             };
           } catch (groupError) {
-            console.log(`Failed to enrich group ${group.id}:`, groupError);
+            // Silently continue on enrichment failure
             return group; // Return original group if enrichment fails
           }
         })
@@ -996,7 +964,6 @@ class FirebaseService {
         return bTime - aTime;
       });
 
-      console.log(`Found and enriched ${enrichedGroups.length} completed groups for user:`, userId);
       return enrichedGroups;
     } catch (error: any) {
       console.error('Error getting completed groups:', error);
@@ -1047,7 +1014,7 @@ class FirebaseService {
                 };
               }
             } catch (memberError) {
-              console.log(`Failed to enrich member ${member.userId}:`, memberError);
+              // Silently continue on enrichment failure
             }
             return member; // Return original member if enrichment fails
           })
@@ -1058,7 +1025,6 @@ class FirebaseService {
           members: enrichedMembers,
         };
       } catch (enrichError) {
-        console.log(`Failed to enrich group ${groupId}:`, enrichError);
         return group; // Return original group if enrichment fails
       }
     } catch (error) {
@@ -1078,7 +1044,6 @@ class FirebaseService {
         updatedAt: updateTimestamp,
       });
 
-      console.log('Group updated successfully:', groupId);
 
       // Return updated group
       const updatedGroup = await this.getGroupById(groupId);
@@ -1108,7 +1073,6 @@ class FirebaseService {
         updatedAt: completedTimestamp,
       });
 
-      console.log('Group completed successfully:', groupId);
 
       // Return updated group
       const completedGroup = await this.getGroupById(groupId);
@@ -1160,7 +1124,6 @@ class FirebaseService {
         updatedAt: new Date().toISOString(),
       });
 
-      console.log('Member added to group successfully');
       
       // Return updated group
       const updatedGroup = await this.getGroupById(groupId);
@@ -1197,7 +1160,6 @@ class FirebaseService {
         updatedAt: new Date().toISOString(),
       });
 
-      console.log('Member removed from group successfully');
       
       // Return updated group
       const updatedGroup = await this.getGroupById(groupId);
@@ -1222,7 +1184,6 @@ class FirebaseService {
         updatedAt: new Date().toISOString(),
       });
       
-      console.log('Group deactivated successfully:', groupId);
     } catch (error) {
       console.error('Error deactivating group:', error);
       throw new Error('Failed to deactivate group');
@@ -1236,7 +1197,6 @@ class FirebaseService {
    */
   async createGroupExpense(groupId: string, expenseData: Omit<GroupExpense, 'id'>): Promise<GroupExpense> {
     try {
-      console.log('Creating expense for group:', groupId);
       
       // Verify group exists
       const group = await this.getGroupById(groupId);
@@ -1284,7 +1244,6 @@ class FirebaseService {
         ...expenseDoc,
       };
 
-      console.log('Expense created successfully:', expense.id);
       
       // Create activity log for expense creation
       try {
@@ -1320,7 +1279,6 @@ class FirebaseService {
    */
   async getGroupExpenses(groupId: string): Promise<GroupExpense[]> {
     try {
-      console.log('Getting expenses for group:', groupId);
       
       if (!groupId) {
         console.error('No groupId provided');
@@ -1337,7 +1295,6 @@ class FirebaseService {
           .orderBy('createdAt', 'desc')
           .get();
       } catch (indexError: any) {
-        console.log('OrderBy index not available, trying without orderBy...');
         // Fallback: try without orderBy
         try {
           snapshot = await this._groupsCollection
@@ -1346,7 +1303,6 @@ class FirebaseService {
             .where('isActive', '==', true)
             .get();
         } catch (whereError: any) {
-          console.log('Where clause failed, trying simple query...');
           // Final fallback: get all expenses and filter client-side
           snapshot = await this._groupsCollection
             .doc(groupId)
@@ -1374,8 +1330,6 @@ class FirebaseService {
         return bTime - aTime; // desc order
       });
 
-      console.log(`Found ${expenses.length} expenses for group:`, groupId);
-      console.log('Expenses data:', expenses);
       return expenses;
     } catch (error: any) {
       console.error('Error getting group expenses:', error);
@@ -1400,7 +1354,6 @@ class FirebaseService {
           updatedAt: updateTimestamp,
         });
 
-      console.log('Expense updated successfully:', expenseId);
 
       // Return updated expense
       const expenseDoc = await this._groupsCollection
@@ -1458,7 +1411,6 @@ class FirebaseService {
         updatedAt: timestamp,
       });
 
-      console.log('Expense deactivated successfully:', expenseId);
     } catch (error) {
       console.error('Error deactivating expense:', error);
       throw new Error('Failed to deactivate expense');
@@ -1504,7 +1456,6 @@ class FirebaseService {
   // Settlement Management
   async createSettlement(settlement: Omit<Settlement, 'id'>): Promise<Settlement> {
     try {
-      console.log('Creating settlement:', settlement);
       const timestamp = new Date().toISOString();
       const settlementData = {
         ...settlement,
@@ -1524,7 +1475,6 @@ class FirebaseService {
         id: docRef.id,
       };
 
-      console.log('Settlement created successfully:', docRef.id);
       
       // Create activity log for settlement creation
       try {
@@ -1597,7 +1547,6 @@ class FirebaseService {
           updatedAt: timestamp,
         });
 
-      console.log('Settlement confirmed successfully:', settlementId);
       
       // Create activity log for settlement confirmation
       try {
@@ -1660,7 +1609,6 @@ class FirebaseService {
 
   async getAllUserSettlements(userId: string): Promise<Settlement[]> {
     try {
-      console.log('Getting all settlements for user:', userId);
       
       // First get all groups user is part of
       const userGroups = await this.getUserGroups(userId);
@@ -1703,7 +1651,6 @@ class FirebaseService {
         return bTime - aTime;
       });
       
-      console.log(`Found ${userSettlements.length} settlements for user across ${groupIds.length} groups`);
       return userSettlements;
     } catch (error) {
       console.error('Error fetching all user settlements:', error);
@@ -1729,7 +1676,6 @@ class FirebaseService {
 
       const docRef = await this._activitiesCollection.add(activity);
       
-      console.log('Activity created successfully:', docRef.id);
       
       return {
         id: docRef.id,
@@ -1746,11 +1692,9 @@ class FirebaseService {
    */
   async deleteActivity(activityId: string): Promise<void> {
     try {
-      console.log('Deleting activity:', activityId);
       
       await this._activitiesCollection.doc(activityId).delete();
       
-      console.log('Activity deleted successfully:', activityId);
     } catch (error) {
       console.error('Error deleting activity:', error);
       throw new Error('Failed to delete activity');
@@ -1762,7 +1706,6 @@ class FirebaseService {
    */
   async getUserActivities(userId: string, limit: number = 50): Promise<Activity[]> {
     try {
-      console.log('Getting activities for user:', userId);
       
       const snapshot = await this._activitiesCollection
         .where('userId', '==', userId)
@@ -1778,14 +1721,12 @@ class FirebaseService {
         } as Activity);
       });
 
-      console.log(`Found ${activities.length} activities for user:`, userId);
       return activities;
     } catch (error) {
       console.error('Error getting user activities:', error);
       
       // If indexing fails, try without orderBy
       try {
-        console.log('Retrying activities query without orderBy...');
         const snapshot = await this._activitiesCollection
           .where('userId', '==', userId)
           .limit(limit)
@@ -1806,7 +1747,6 @@ class FirebaseService {
           return bTime - aTime;
         });
 
-        console.log(`Found ${activities.length} activities (client sorted) for user:`, userId);
         return activities;
       } catch (fallbackError) {
         console.error('Fallback activities query also failed:', fallbackError);
@@ -1822,7 +1762,6 @@ class FirebaseService {
     try {
       if (groupIds.length === 0) return [];
 
-      console.log('Getting activities for groups:', groupIds);
       
       const promises = groupIds.map(groupId =>
         this._activitiesCollection
@@ -1831,7 +1770,6 @@ class FirebaseService {
           .limit(Math.ceil(limit / groupIds.length))
           .get()
           .catch(error => {
-            console.log(`Failed to get activities for group ${groupId}:`, error);
             return null;
           })
       );
@@ -1860,7 +1798,6 @@ class FirebaseService {
       // Limit final results
       const limitedActivities = activities.slice(0, limit);
       
-      console.log(`Found ${limitedActivities.length} group activities`);
       return limitedActivities;
     } catch (error) {
       console.error('Error getting group activities:', error);

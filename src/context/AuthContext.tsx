@@ -75,7 +75,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 // Clear user from context
                 setUser(null);
 
-                console.log('User logged out successfully');
                 resolve();
               } catch (error) {
                 console.error('Logout error:', error);

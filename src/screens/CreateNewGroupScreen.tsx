@@ -70,7 +70,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   useEffect(() => {
     // Only check permissions once on mount
     if (!permissionState.initialized) {
-      console.log('Component mounted, checking contacts permission...');
       checkContactsPermission();
     }
   }, []); // Remove dependencies to prevent re-runs
@@ -106,7 +105,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         permissionState.initialized &&
         (permissionState.status === 'blocked' || permissionState.status === 'denied')
       ) {
-        console.log('App came to foreground, re-checking contacts permission...');
         setTimeout(() => {
           checkContactsPermission();
         }, 500); // Small delay to prevent rapid state changes
@@ -130,7 +128,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const checkContactsPermission = async () => {
     // Prevent multiple simultaneous permission checks
     if (permissionCheckRef.current) {
-      console.log('Permission check already in progress, skipping...');
       return;
     }
 
@@ -142,33 +139,26 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         setPermissionState(prev => ({ ...prev, status: 'checking' }));
       }
 
-      console.log('CheckContactsPermission - Using react-native-permissions directly...');
       const permission = getContactsPermission();
       const result = await check(permission);
-      console.log('CheckContactsPermission - Permission result:', result);
 
       switch (result) {
         case RESULTS.GRANTED:
-          console.log('CheckContactsPermission - Setting state to GRANTED');
           setPermissionState({ status: 'granted', hasRequested: true, initialized: true });
           loadContacts();
           break;
         case RESULTS.BLOCKED:
-          console.log('CheckContactsPermission - Setting state to BLOCKED');
           setPermissionState({ status: 'blocked', hasRequested: true, initialized: true });
           break;
         case RESULTS.UNAVAILABLE:
-          console.log('CheckContactsPermission - Setting state to UNAVAILABLE');
           setPermissionState({ status: 'unavailable', hasRequested: true, initialized: true });
           break;
         case RESULTS.DENIED:
         default:
-          console.log('CheckContactsPermission - Setting state to DENIED');
           setPermissionState({ status: 'denied', hasRequested: false, initialized: true });
           break;
       }
     } catch (error) {
-      console.error('Error checking contacts permission:', error);
       setPermissionState({ status: 'denied', hasRequested: false, initialized: true });
     } finally {
       permissionCheckRef.current = false;
@@ -177,12 +167,8 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
   const requestContactsPermission = async () => {
     try {
-      console.log('Requesting contacts permission...');
-
       const permission = getContactsPermission();
       const result = await request(permission);
-
-      console.log('Contacts permission request result:', result);
 
       switch (result) {
         case RESULTS.GRANTED:
@@ -206,7 +192,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           showPermissionDeniedAlert();
       }
     } catch (error) {
-      console.error('Error requesting contacts permission:', error);
       setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
       Alert.alert('Error', 'Failed to request contacts permission. Please try again.');
     }
@@ -248,31 +233,24 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const handleRequestContacts = async () => {
     try {
       setContactsLoading(true);
-      console.log('HandleRequestContacts - Requesting permission directly...');
-
       // First request permission directly
       const permission = getContactsPermission();
       const result = await request(permission);
-      console.log('HandleRequestContacts - Permission request result:', result);
 
       if (result === RESULTS.GRANTED) {
         // Permission granted! Now fetch contacts
-        console.log('HandleRequestContacts - Permission granted, fetching contacts...');
         setPermissionState({ status: 'granted', hasRequested: true, initialized: true });
 
         try {
           const contacts = await Contacts.getAll();
-          console.log(`HandleRequestContacts - Fetched ${contacts.length} contacts`);
 
           // Process contacts with registration status together
           await processContactsWithRegistration(contacts);
         } catch (contactError: any) {
-          console.error('HandleRequestContacts - Error fetching contacts:', contactError);
           Alert.alert('Error', 'Failed to load contacts. Please try again.');
         }
       } else if (result === RESULTS.BLOCKED) {
         // Permission permanently blocked
-        console.log('HandleRequestContacts - Permission blocked, showing settings dialog...');
         setPermissionState({ status: 'blocked', hasRequested: true, initialized: true });
 
         Alert.alert(
@@ -282,13 +260,12 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Open Settings',
-              onPress: () => openSettings().catch(err => console.error('Error opening settings:', err))
+              onPress: () => openSettings().catch(err => {})
             },
           ]
         );
       } else if (result === RESULTS.UNAVAILABLE) {
         // Contacts unavailable
-        console.log('HandleRequestContacts - Contacts unavailable...');
         setPermissionState({ status: 'unavailable', hasRequested: true, initialized: true });
 
         Alert.alert(
@@ -298,7 +275,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         );
       } else {
         // Permission denied
-        console.log('HandleRequestContacts - Permission denied...');
         setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
 
         Alert.alert(
@@ -311,7 +287,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         );
       }
     } catch (error: any) {
-      console.error('HandleRequestContacts - Error:', error);
       setPermissionState({ status: 'denied', hasRequested: true, initialized: true });
       Alert.alert('Error', error.message || 'Failed to request contacts permission. Please try again.');
     } finally {
@@ -340,11 +315,8 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const loadContacts = async () => {
     setContactsLoading(true);
     try {
-      console.log('Loading contacts and registration status simultaneously...');
-      
       // Get contacts from device
       const contactsList = await Contacts.getAll();
-      console.log(`Fetched ${contactsList.length} contacts`);
 
       // Process contacts and get Firebase data simultaneously
       await processContactsWithRegistration(contactsList);
@@ -356,7 +328,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         filterContactsByFirebaseUsers(contactsList);
       }, 50); // Small delay to ensure UI updates first
     } catch (error) {
-      console.error('Error loading contacts:', error);
       Alert.alert('Error', 'Failed to load contacts.');
       setContactsLoading(false);
     }
@@ -388,7 +359,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
       if (phoneNumbers.length > 0) {
         // Get registered users from Firebase
-        console.log(`Checking registration for ${phoneNumbers.length} contacts...`);
         const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
         
         const registeredPhones = new Set<string>();
@@ -426,14 +396,12 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           return 0;
         });
 
-        console.log(`Showing ${sortedContacts.length} contacts with registration status`);
         setFilteredContacts(sortedContacts);
       } else {
         // No valid phone numbers, show all contacts
         setFilteredContacts(allContacts);
       }
     } catch (error) {
-      console.error('Error processing contacts with registration:', error);
       // Show contacts without registration status as fallback
       const basicContacts: FilteredContact[] = [];
       contactsList.forEach(contact => {
@@ -490,9 +458,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         title: 'Join KharchaSplit with my referral code!',
       });
 
-      console.log(`Invited ${contactName} with referral code: ${userReferralCode}`);
     } catch (error) {
-      console.error('Error sharing invitation:', error);
       Alert.alert('Error', 'Failed to share invitation. Please try again.');
     }
   };
@@ -508,7 +474,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
     launchImageLibrary(options, response => {
       if (response.didCancel) {
-        console.log('User cancelled image picker');
       } else if (response.errorMessage) {
         Alert.alert('Error', 'Failed to select image');
       } else if (response.assets && response.assets[0]) {
@@ -563,16 +528,10 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         currency: 'INR',
       };
 
-      console.log('Creating group with data:', {
-        ...createGroupData,
-        memberPhoneNumbers: memberPhoneNumbers.length,
-        createdBy: user.id
-      });
 
       // Create group in Firebase
       const newGroup = await firebaseService.createGroup(createGroupData, user.id);
 
-      console.log('Group created successfully:', newGroup.id);
 
       Alert.alert(
         'Success', 
@@ -588,7 +547,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         ]
       );
     } catch (error: any) {
-      console.error('Error creating group:', error);
       Alert.alert('Error', error.message || 'Failed to create group. Please try again.');
     } finally {
       setLoading(false);
@@ -702,10 +660,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
-                onChangeText={(text) => {
-                  console.log('Search query changed:', text);
-                  setSearchQuery(text);
-                }}
+                onChangeText={setSearchQuery}
                 placeholder="Search Person or Phone Number"
                 placeholderTextColor={colors.secondaryText}
                 autoCorrect={false}

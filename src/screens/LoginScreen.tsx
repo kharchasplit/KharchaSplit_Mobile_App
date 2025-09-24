@@ -63,10 +63,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       
       if (lastNumber && lastNumber.length === 10) {
         setPhoneNumber(lastNumber);
-        console.log('Loaded last used number:', lastNumber);
       }
     } catch (error) {
-      console.log('Failed to load last number:', error);
     } finally {
       setLoadingLastNumber(false);
     }

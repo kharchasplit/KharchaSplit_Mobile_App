@@ -46,7 +46,6 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
     }
 
     try {
-      console.log('Loading activities for user:', user.id);
       
       // Get user's groups first to get group activities
       const userGroups = await firebaseService.getUserGroups(user.id);
@@ -76,9 +75,7 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
       
       
       setActivities(limitedActivities);
-      console.log(`Loaded ${limitedActivities.length} activities`);
     } catch (error) {
-      console.error('Error loading activities:', error);
       Alert.alert('Error', 'Failed to load recent activities. Please try again.');
     } finally {
       setLoading(false);
@@ -225,7 +222,6 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
               }
               
             } catch (error) {
-              console.error('Error deleting activity:', error);
               
               // Error haptic feedback
               if (Platform.OS === 'ios') {

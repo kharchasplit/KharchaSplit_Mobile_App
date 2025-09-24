@@ -198,7 +198,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             details = balance.details;
             
           } catch (expenseError) {
-            console.error(`Error loading expenses for group ${group.id}:`, expenseError);
           }
 
           return {
@@ -223,7 +222,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       // Calculate overall balance
       calculateOverallBalance(convertedGroups);
     } catch (error: any) {
-      console.error('Error loading groups from Firebase:', error);
       
       // Show user-friendly error message for specific cases
       if (error.message.includes('index required')) {

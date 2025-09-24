@@ -12,7 +12,6 @@ export class PhoneStorage {
         await AsyncStorage.setItem(PHONE_NUMBER_KEY, phoneNumber);
       }
     } catch (error) {
-      console.log('Failed to save phone number:', error);
     }
   }
 
@@ -24,7 +23,6 @@ export class PhoneStorage {
       const phoneNumber = await AsyncStorage.getItem(PHONE_NUMBER_KEY);
       return phoneNumber;
     } catch (error) {
-      console.log('Failed to get last phone number:', error);
       return null;
     }
   }
@@ -36,7 +34,6 @@ export class PhoneStorage {
     try {
       await AsyncStorage.removeItem(PHONE_NUMBER_KEY);
     } catch (error) {
-      console.log('Failed to clear phone number:', error);
     }
   }
 

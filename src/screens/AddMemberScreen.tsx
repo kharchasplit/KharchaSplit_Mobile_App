@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { firebaseService } from '../services/firebaseService';
 import { useAuth } from '../context/AuthContext';
 import { Share } from 'react-native';
+import { s, vs, ms } from '../utils/deviceDimensions';
 
 interface Group {
   id: string;
@@ -158,7 +159,6 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
 
       if (phoneNumbers.length > 0) {
         // Get registered users from Firebase
-        console.log(`Checking registration for ${phoneNumbers.length} contacts...`);
         const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
         
         const registeredPhones = new Set<string>();
@@ -196,7 +196,6 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           return 0;
         });
 
-        console.log(`Showing ${sortedContacts.length} contacts with registration status`);
         setFilteredContacts(sortedContacts);
       } else {
         // No valid phone numbers, show all contacts

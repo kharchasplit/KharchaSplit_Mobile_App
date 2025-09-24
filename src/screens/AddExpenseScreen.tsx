@@ -178,7 +178,6 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
         setPaidBy(initialMembers[0]);
       }
     } catch (error) {
-      console.error('Error loading group members:', error);
       Alert.alert("Error", "Failed to load group members");
     } finally {
       setMembersLoading(false);
@@ -300,15 +299,12 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
     
     if (!paidBy) return Alert.alert("Error", "Please select who paid");
     if (!group?.id) {
-      console.error('Group ID missing:', group);
       return Alert.alert("Error", "Group information is missing");
     }
     if (!user?.id) {
-      console.error('User ID missing:', user);
       return Alert.alert("Error", "User information is missing");
     }
     
-    console.log('Creating expense for group:', group.id, 'by user:', user.id);
     
     const selectedMembers = members.filter((m) => m.isSelected);
     if (!selectedMembers.length) return Alert.alert("Error", "Please select members to split");
@@ -385,9 +381,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
       };
 
       // Create expense in Firebase
-      console.log('Creating expense with data:', expense);
       const createdExpense = await firebaseService.createGroupExpense(group.id, expense);
-      console.log('Expense created successfully:', createdExpense);
       
       Alert.alert("Success", "Expense saved successfully", [
         { 
@@ -402,7 +396,6 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
         },
       ]);
     } catch (error: any) {
-      console.error('Error saving expense:', error);
       Alert.alert("Error", error.message || "Failed to save expense");
     } finally {
       setLoading(false);

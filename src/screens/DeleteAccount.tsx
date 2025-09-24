@@ -176,7 +176,6 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
                 await logout();
                 onClose();
               } catch (error) {
-                console.error('Logout error after account deletion:', error);
                 onClose();
               }
             }
@@ -184,7 +183,6 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
         ]
       );
     } catch (error: any) {
-      console.error('Error deleting account:', error);
       setIsDeleting(false);
       
       Alert.alert(

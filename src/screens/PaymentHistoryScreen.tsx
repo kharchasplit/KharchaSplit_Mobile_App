@@ -59,7 +59,6 @@ export const PaymentHistoryScreen: React.FC<Props> = ({ navigation }) => {
     }
 
     try {
-      console.log('Loading payment history for user:', user.id);
       
       // Get all settlements for the user
       const settlements = await firebaseService.getAllUserSettlements(user.id);
@@ -90,7 +89,6 @@ export const PaymentHistoryScreen: React.FC<Props> = ({ navigation }) => {
       });
       
       setPaymentHistory(payments);
-      console.log(`Loaded ${payments.length} payment history items`);
     } catch (error) {
       console.error('Error loading payment history:', error);
       Alert.alert('Error', 'Failed to load payment history. Please try again.');

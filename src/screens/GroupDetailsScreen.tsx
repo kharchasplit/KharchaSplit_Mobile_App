@@ -55,7 +55,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
   const { user } = useAuth();
   const { group: initialGroup } = route.params || {};
   
-  console.log('Current user:', user);
   
   // Responsive setup
   const { width: screenWidth } = useWindowDimensions();
@@ -86,64 +85,32 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const loadGroupData = useCallback(async () => {
     if (!group?.id) {
-      console.log('No group ID available');
       return;
     }
     
-    console.log('Loading group data for group:', group.id);
     
     try {
       setLoading(true);
       
       // Load latest group data
-      console.log('Fetching group details...');
       const updatedGroup = await firebaseService.getGroupById(group.id);
       if (updatedGroup) {
-        console.log('Updated group data:', updatedGroup);
         setGroup(updatedGroup);
       }
       
       // Load expenses
-      console.log('Fetching group expenses...');
       const groupExpenses = await firebaseService.getGroupExpenses(group.id);
-      console.log('Fetched expenses:', groupExpenses.length, 'expenses');
       
-      // Direct log of expense details
-      if (groupExpenses.length > 0) {
-        const expense = groupExpenses[0];
-        console.log('=== EXPENSE DETAILS ===');
-        console.log('Amount:', expense.amount);
-        console.log('Paid by:', expense.paidBy);
-        console.log('Split type:', expense.splitType);
-        console.log('Participants:', expense.participants);
-        console.log('======================');
-      }
       
       setExpenses(groupExpenses);
       
       // Calculate balances
-      console.log('Calculating balances...');
       const members = updatedGroup?.members || group.members;
-      console.log('Members for balance calculation:', members);
-      console.log('Expenses for balance calculation:', groupExpenses);
-      // Log expense details
-      if (groupExpenses.length > 0) {
-        console.log('First expense details:', {
-          amount: groupExpenses[0].amount,
-          paidBy: groupExpenses[0].paidBy,
-          participants: groupExpenses[0].participants,
-          splitType: groupExpenses[0].splitType
-        });
-      }
       calculateBalances(groupExpenses, members);
-      console.log('Balances calculated');
-      console.log('Current balances state:', balances);
       
       // Load settlement history from Firebase
-      console.log('Fetching settlement history...');
       const settlementHistory = await firebaseService.getGroupSettlements(group.id);
       setFirebaseSettlements(settlementHistory);
-      console.log('Fetched settlements:', settlementHistory.length, 'settlements');
       
     } catch (error) {
       console.error('Error loading group data:', error);
@@ -159,7 +126,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // Recalculate settlements when firebase settlements change
   useEffect(() => {
-    console.log('useEffect for settlements - balances:', balances.length, 'fbSettlements:', firebaseSettlements.length);
     if (balances.length > 0) {
       calculateSettlements(balances, firebaseSettlements);
     }
@@ -183,13 +149,7 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
   const calculateSettlements = useCallback((balances: Balance[], fbSettlements: any[] = []) => {
     const settlements: Settlement[] = [];
     
-    console.log('calculateSettlements called with:', {
-      balancesCount: balances.length,
-      fbSettlementsCount: fbSettlements.length,
-      balances: balances.map(b => ({ userId: b.userId, name: b.name, netBalance: b.netBalance }))
-    });
     
-    console.log('User ID:', user?.id);
     
     // Create arrays of creditors and debtors
     const creditors = balances.filter(b => b.netBalance > 0)
@@ -200,8 +160,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
       .map(b => ({ userId: b.userId, name: b.name, amount: Math.abs(b.netBalance) }))
       .sort((a, b) => b.amount - a.amount);
       
-    console.log('Creditors:', creditors);
-    console.log('Debtors:', debtors);
     
     // Greedy algorithm to minimize transactions
     let i = 0, j = 0;
@@ -241,12 +199,10 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
       if (debtor.amount < 0.01) j++;
     }
     
-    console.log('Final settlements:', settlements);
     setSettlements(settlements);
   }, [user?.id]);
 
   const calculateBalances = useCallback((expenses: GroupExpense[], members: GroupMember[]) => {
-    console.log('calculateBalances called with:', expenses.length, 'expenses and', members.length, 'members');
     
     // Initialize balance tracking
     const balanceMap = new Map<string, Balance>();
@@ -316,7 +272,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
       }
     });
     
-    console.log('Setting balances:', calculatedBalances);
     setBalances(calculatedBalances);
   }, []);
 
@@ -458,15 +413,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
     const isCurrentUserTo = item.to === user?.id;
     const settlementStatus = item.firebaseSettlement?.status;
     
-    console.log('Rendering settlement:', {
-      from: item.from,
-      to: item.to,
-      amount: item.amount,
-      isCurrentUserFrom,
-      isCurrentUserTo,
-      settlementStatus,
-      currentUserId: user?.id
-    });
     
     return (
       <View style={styles.settlementItem}>
@@ -668,34 +614,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 
         {activeTab === 'settlement' && (
           <>
-            {console.log('Settlement tab - settlements:', settlements)}
-            {console.log('Settlement tab - balances:', balances)}
-            {/* Test button to create dummy settlement */}
-            <TouchableOpacity 
-              onPress={() => {
-                const testSettlement: Settlement = {
-                  from: user?.id || 'test-from',
-                  fromName: 'You',
-                  to: 'test-user-id',
-                  toName: 'Test User',
-                  amount: 100,
-                  firebaseSettlement: undefined
-                };
-                setSettlements([testSettlement]);
-                console.log('Test settlement created');
-                Alert.alert('Test', 'Settlement created');
-              }}
-              style={{
-                backgroundColor: '#007AFF',
-                padding: scale(15),
-                margin: scale(20),
-                borderRadius: scale(8),
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: scale(16), fontWeight: 'bold' }}>Create Test Settlement</Text>
-            </TouchableOpacity>
             <FlatList
               data={settlements}
               renderItem={renderSettlementItem}
@@ -712,29 +630,6 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
               }
               contentContainerStyle={settlements.length === 0 && styles.emptyList}
             />
-            {/* Debug button - remove later */}
-            <TouchableOpacity 
-              style={{
-                position: 'absolute',
-                bottom: scale(20),
-                right: scale(20),
-                backgroundColor: colors.primaryButton,
-                padding: scale(10),
-                borderRadius: scale(5),
-                elevation: 5,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-              }}
-              onPress={() => {
-                console.log('Debug - Current settlements:', settlements);
-                console.log('Debug - Current balances:', balances);
-                console.log('Debug - Current user:', user);
-              }}
-            >
-              <Text style={{ color: colors.primaryButtonText, fontWeight: 'bold' }}>Debug Log</Text>
-            </TouchableOpacity>
           </>
         )}
       </View>

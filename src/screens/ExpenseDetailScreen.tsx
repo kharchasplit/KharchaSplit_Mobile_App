@@ -53,8 +53,6 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
   const loadExpenseDetails = async () => {
     setLoading(true);
     try {
-      console.log('Loading expense details:', expense);
-      console.log('Group members:', group.members);
       
       setExpenseData(expense);
       
@@ -79,11 +77,9 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
       }
       
       setGroupMembers(members);
-      console.log('Processed group members:', members);
       
       
     } catch (error) {
-      console.error('Error loading expense details:', error);
       Alert.alert('Error', 'Failed to load expense details');
     } finally {
       setLoading(false);
@@ -134,7 +130,6 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
               source={{ uri: imageUri }} 
               style={styles(colors).participantAvatar}
               onError={() => {
-                console.log('Failed to load participant avatar:', displayName);
                 debugImageData(displayAvatar, `Participant ${displayName} Avatar`);
               }}
             />
@@ -220,7 +215,6 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
                   source={{ uri: imageUri }} 
                   style={styles(colors).paidByAvatar}
                   onError={() => {
-                    console.log('Failed to load paid by avatar:', paidByMember?.name);
                     debugImageData(paidByMember?.avatar, `PaidBy ${paidByMember?.name} Avatar`);
                   }}
                 />
@@ -296,7 +290,6 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
                 }} 
                 style={styles(colors).receiptImage}
                 onError={(error) => {
-                  console.error('Receipt image failed to load:', error.nativeEvent.error);
                   debugImageData(
                     currentExpense.receiptUrl || currentExpense.receiptBase64, 
                     'Failed Receipt Image'

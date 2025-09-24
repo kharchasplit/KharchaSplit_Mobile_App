@@ -99,16 +99,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   source={{ uri: getProfileImageUri(user || {}) }}
                   style={styles.avatar}
                   onError={(error) => {
-                    console.log('Profile image failed to load:', error.nativeEvent.error);
-                    console.log('User data:', {
-                      hasProfileImage: !!(user?.profileImage || user?.profileImageBase64),
+                    // Image load error
                       profileImageLength: (user?.profileImage || user?.profileImageBase64)?.length,
                       firstName: user?.firstName,
                       name: user?.name
                     });
                   }}
                   onLoad={() => {
-                    console.log('Profile image loaded successfully');
                   }}
                 />
               )}

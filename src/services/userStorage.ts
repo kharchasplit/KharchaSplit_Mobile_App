@@ -66,7 +66,6 @@ export const userStorage = {
   async logout(): Promise<void> {
     try {
       await this.removeUser();
-      console.log('User logged out successfully');
     } catch (error) {
       console.error('Error during logout:', error);
       throw error;

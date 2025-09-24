@@ -44,16 +44,6 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
   // Load user data on mount and sync with real-time user updates
   useEffect(() => {
     if (user) {
-      console.log('Loading user data dynamically:', {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        name: user.name,
-        email: user.email,
-        alternatePhone: user.alternatePhone,
-        address: user.address,
-        hasProfileImage: !!(user.profileImageBase64 || user.profileImage)
-      });
 
       const alternatePhoneWithoutCode = user.alternatePhone?.replace(/^\+91/, '') || '';
 
@@ -134,10 +124,6 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
         profileImageBase64: profileImageBase64 || undefined,
       };
 
-      console.log('Updating profile with data:', {
-        ...updateData,
-        profileImageBase64: updateData.profileImageBase64 ? `[${updateData.profileImageBase64.length} characters]` : 'undefined'
-      });
 
       // Update in Firebase
       const updatedUser = await firebaseService.updateUser(user.id, updateData);
@@ -148,7 +134,6 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
       // Update auth context to reflect changes immediately
       login(updatedUser);
 
-      console.log('Profile updated successfully in Firebase and local storage');
 
       // Show success without closing - keep UI intact
       Alert.alert('Success', 'Profile updated successfully!');
@@ -184,12 +169,10 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
   const selectImage = (options: ImageLibraryOptions) => {
     launchImageLibrary(options, async (response) => {
       if (response.didCancel) {
-        console.log('User cancelled image picker');
         return;
       }
 
       if (response.errorMessage) {
-        console.log('ImagePicker Error: ', response.errorMessage);
         Alert.alert('Error', 'Failed to select image');
         return;
       }
@@ -212,10 +195,6 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
           if (base64Data) {
             setProfileImageBase64(base64Data);
             setDisplayImageUri(`data:image/jpeg;base64,${base64Data}`);
-            console.log('Profile image updated with base64 data:', {
-              imageLength: base64Data.length,
-              preview: base64Data.substring(0, 50) + '...'
-            });
           }
         } catch (error) {
           console.error('Error processing image:', error);
@@ -226,7 +205,6 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
   };
 
   const removePhoto = () => {
-    console.log('Removing profile photo, reverting to placeholder');
     setProfileImageBase64('');
     setDisplayImageUri(getProfileImageUri({ firstName: formData.firstName }));
   };
