@@ -26,6 +26,7 @@ import { typography } from '../utils/typography';
 import { firebaseService, GroupExpense } from '../services/firebaseService';
 import { useAuth } from '../context/AuthContext';
 import { pickReceiptImage, formatFileSize, validateReceiptImage } from '../utils/imageUtils';
+import { PhotoLibraryPermissionHelper } from '../utils/PhotoLibraryPermissionHelper';
 
 // Enable LayoutAnimation for Android
 if (
@@ -258,13 +259,20 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   };
   
   const handleUploadReceipt = () => {
-    pickReceiptImage(
-      (image) => {
-        setReceiptImage(image.base64);
-        setReceiptSize(image.size);
+    PhotoLibraryPermissionHelper.handlePhotoLibraryPermission(
+      () => {
+        pickReceiptImage(
+          (image) => {
+            setReceiptImage(image.base64);
+            setReceiptSize(image.size);
+          },
+          (error) => {
+            Alert.alert('Error', error);
+          }
+        );
       },
-      (error) => {
-        Alert.alert('Error', error);
+      () => {
+        // Permission denied - do nothing
       }
     );
   };

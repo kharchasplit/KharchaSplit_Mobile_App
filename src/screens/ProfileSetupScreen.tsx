@@ -16,6 +16,8 @@ import {
 import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType } from 'react-native-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { NotificationPermissionHelper } from '../utils/NotificationPermissionHelper';
+import { PhotoLibraryPermissionHelper } from '../utils/PhotoLibraryPermissionHelper';
 
 interface ProfileSetupScreenProps {
   navigation: any;
@@ -156,6 +158,12 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
 
       // Update auth context to trigger navigation to main app
       login(userProfile);
+      
+      // Request notification permission after successful profile creation
+      setTimeout(async () => {
+        const result = await NotificationPermissionHelper.requestPermissionIfNeeded();
+        // No UI needed, just request the permission
+      }, 1000); // Small delay to ensure smooth navigation
     } catch (error) {
       Alert.alert('Error', 'Failed to create profile. Please try again.');
       console.error('Save profile error:', error);
@@ -202,9 +210,19 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
         },
         (buttonIndex) => {
           if (buttonIndex === 1) {
-            launchCamera(options, handleImageResponse);
+            PhotoLibraryPermissionHelper.handleCameraPermission(
+              () => launchCamera(options, handleImageResponse),
+              () => {
+                // Permission denied
+              }
+            );
           } else if (buttonIndex === 2) {
-            launchImageLibrary(options, handleImageResponse);
+            PhotoLibraryPermissionHelper.handlePhotoLibraryPermission(
+              () => launchImageLibrary(options, handleImageResponse),
+              () => {
+                // Permission denied
+              }
+            );
           }
         }
       );
@@ -214,8 +232,28 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
         'Choose how you want to select an image',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Take Photo', onPress: () => launchCamera(options, handleImageResponse) },
-          { text: 'Choose from Library', onPress: () => launchImageLibrary(options, handleImageResponse) },
+          { 
+            text: 'Take Photo', 
+            onPress: () => {
+              PhotoLibraryPermissionHelper.handleCameraPermission(
+                () => launchCamera(options, handleImageResponse),
+                () => {
+                  // Permission denied
+                }
+              );
+            }
+          },
+          { 
+            text: 'Choose from Library', 
+            onPress: () => {
+              PhotoLibraryPermissionHelper.handlePhotoLibraryPermission(
+                () => launchImageLibrary(options, handleImageResponse),
+                () => {
+                  // Permission denied
+                }
+              );
+            }
+          },
         ]
       );
     }

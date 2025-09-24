@@ -13,7 +13,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ensureDataUri, debugImageData } from '../utils/imageUtils';
+import { ensureDataUri } from '../utils/imageUtils';
 
 interface ExpenseDetailScreenProps {
   route: {
@@ -130,7 +130,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
               source={{ uri: imageUri }} 
               style={styles(colors).participantAvatar}
               onError={() => {
-                debugImageData(displayAvatar, `Participant ${displayName} Avatar`);
+                // Avatar processing
               }}
             />
           ) : (
@@ -215,7 +215,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
                   source={{ uri: imageUri }} 
                   style={styles(colors).paidByAvatar}
                   onError={() => {
-                    debugImageData(paidByMember?.avatar, `PaidBy ${paidByMember?.name} Avatar`);
+                    // Avatar processing
                   }}
                 />
               ) : (
@@ -272,7 +272,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
                 const receiptData = currentExpense.receiptUrl || currentExpense.receiptBase64;
                 const formattedReceipt = ensureDataUri(receiptData);
                 
-                debugImageData(formattedReceipt, 'ExpenseDetail Navigation');
+                // Navigate to receipt view
                 
                 if (formattedReceipt) {
                   navigation.navigate('ViewReceipt', {
@@ -290,10 +290,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
                 }} 
                 style={styles(colors).receiptImage}
                 onError={(error) => {
-                  debugImageData(
-                    currentExpense.receiptUrl || currentExpense.receiptBase64, 
-                    'Failed Receipt Image'
-                  );
+                  // Handle image load error
                 }}
               />
               <View style={styles(colors).receiptOverlay}>

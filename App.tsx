@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -8,12 +8,38 @@ import { AuthenticatedNavigator } from './src/navigation/AuthenticatedNavigator'
 import { UnauthenticatedNavigator } from './src/navigation/AppNavigator';
 import { BiometricAuthScreen } from './src/screens/BiometricAuthScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
+import messaging from '@react-native-firebase/messaging';
+import { FCMService } from './src/services/FCMService';
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const { isBiometricLocked, setBiometricLocked } = useBiometric();
   const { colors } = useTheme();
   const [showSplash, setShowSplash] = useState(true);
+
+  // Initialize FCM when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const initializeFCM = async () => {
+        try {
+          // Request permission and initialize FCM
+          const authStatus = await messaging().requestPermission();
+          const enabled =
+            authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+            authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+          if (enabled) {
+            // Initialize background message handler is already done in index.js
+            await FCMService.initialize(user.id);
+          }
+        } catch (error) {
+          console.error('FCM initialization error:', error);
+        }
+      };
+
+      initializeFCM();
+    }
+  }, [isAuthenticated, user]);
 
   // Show splash screen first
   if (showSplash) {

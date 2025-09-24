@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { firebaseService, UpdateUserProfile } from '../services/firebaseService';
 import { userStorage } from '../services/userStorage';
 import { processProfileImage, getProfileImageUri } from '../utils/imageUtils';
+import { PhotoLibraryPermissionHelper } from '../utils/PhotoLibraryPermissionHelper';
 
 interface EditProfileScreenProps {
   onClose: () => void;
@@ -160,7 +161,17 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onClose })
       'Choose an option',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Choose from Gallery', onPress: () => selectImage(options) },
+        { 
+          text: 'Choose from Gallery', 
+          onPress: () => {
+            PhotoLibraryPermissionHelper.handlePhotoLibraryPermission(
+              () => selectImage(options),
+              () => {
+                // Permission denied - do nothing
+              }
+            );
+          }
+        },
         { text: 'Remove Photo', style: 'destructive', onPress: removePhoto },
       ]
     );

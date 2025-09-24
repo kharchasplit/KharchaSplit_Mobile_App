@@ -222,10 +222,11 @@ const handleConfirmPayment = async (settlement) => {
 - **Solution**: Use `useFocusEffect` hook
 
 ### 5. Firebase Undefined Values Error
-- **Issue**: `Error: Unsupported field value: undefined` when creating expenses
+- **Issue**: `Error: Unsupported field value: undefined` when creating groups/expenses
 - **Solution**: 
-  - Use conditional spread operator: `...(value && { field: value })`
-  - Filter undefined values before Firebase operations
+  - **createGroup**: Use conditional spread operator: `...(groupData.description && { description: groupData.description })`
+  - **updateUser/updateGroup**: Filter undefined values: `Object.fromEntries(Object.entries(updateData).filter(([_, value]) => value !== undefined))`
+  - **createGroupExpense**: Already implemented undefined value filtering
   - Add proper validation for required fields
   - Use fallback values: `field: value || defaultValue`
 
@@ -351,4 +352,4 @@ cd ios && pod install
 
 ---
 
-Last Updated: 2025-09-18T21:00:00+05:30 - Fixed Firebase FieldValue increment error and undefined values
+Last Updated: 2025-09-24T21:30:00+05:30 - Fixed Firebase undefined values errors, implemented complete FCM notification system, cleaned up debug logs and test code

@@ -21,7 +21,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { ensureDataUri, debugImageData } from '../utils/imageUtils';
+import { ensureDataUri } from '../utils/imageUtils';
 // --- RESPONSIVE ---
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import { typography } from '../utils/typography'; // Assuming this path is correct
@@ -208,7 +208,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
         // Debug receipt data transformation
         if (expense.receiptBase64) {
-          debugImageData(expense.receiptBase64, `Receipt for ${expense.description}`);
+          // Process receipt image
         }
 
         return {
@@ -843,7 +843,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                       source={{uri: imageUri}} 
                       style={styles.balanceAvatar}
                       onError={() => {
-                        debugImageData(item.member.avatar, `Balance ${item.member.name} Avatar`);
+                        // Process member avatar
                       }}
                     />
                   ) : (
@@ -893,7 +893,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                             source={{uri: imageUri}} 
                             style={styles.breakdownAvatar}
                             onError={() => {
-                              debugImageData(b.avatar, `Breakdown ${b.fromUser || b.toUser} Avatar`);
+                              // Process breakdown avatar
                             }}
                           />
                         ) : (
@@ -1150,7 +1150,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                         source={{uri: imageUri}} 
                         style={styles.memberAvatar}
                         onError={() => {
-                          debugImageData(member.avatar, `Member ${member.name} Avatar`);
+                          // Process member avatar
                         }}
                       />
                     ) : (

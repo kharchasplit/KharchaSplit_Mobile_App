@@ -13,6 +13,7 @@ export interface UserProfile {
   profileImageBase64?: string; // Base64 encoded image (current)
   referralCode?: string; // User's unique referral code
   referredBy?: string; // ID of user who referred this user
+  fcmToken?: string; // Firebase Cloud Messaging token for push notifications
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
@@ -43,6 +44,7 @@ export interface UpdateUserProfile {
   profileImageBase64?: string; // Base64 encoded image (current)
   referralCode?: string; // User's unique referral code
   referredBy?: string; // ID of user who referred this user
+  fcmToken?: string; // Firebase Cloud Messaging token for push notifications
 }
 
 export interface ReferralHistoryItem {
@@ -185,6 +187,41 @@ class FirebaseService {
     return this._groupsCollection;
   }
 
+  /**
+   * Clean undefined values from objects recursively
+   */
+  private cleanObject<T extends Record<string, any>>(obj: T): T {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          cleaned[key] = this.cleanObject(value);
+        } else if (Array.isArray(value)) {
+          cleaned[key] = this.cleanArray(value);
+        } else {
+          cleaned[key] = value;
+        }
+      }
+    }
+    return cleaned as T;
+  }
+
+  /**
+   * Clean undefined values from arrays recursively
+   */
+  private cleanArray<T>(arr: T[]): T[] {
+    return arr
+      .filter(item => item !== undefined)
+      .map(item => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          return this.cleanObject(item as any);
+        } else if (Array.isArray(item)) {
+          return this.cleanArray(item);
+        }
+        return item;
+      });
+  }
+
   async createUser(userData: CreateUserProfile): Promise<UserProfile> {
     try {
       const timestamp = new Date().toISOString();
@@ -246,8 +283,11 @@ class FirebaseService {
   async updateUser(userId: string, updateData: UpdateUserProfile): Promise<UserProfile> {
     try {
       const updateTimestamp = new Date().toISOString();
+      // Filter out undefined values before updating
+      const cleanUpdateData = this.cleanObject(updateData);
+      
       await this._usersCollection.doc(userId).update({
-        ...updateData,
+        ...cleanUpdateData,
         updatedAt: updateTimestamp,
       });
 
@@ -716,7 +756,7 @@ class FirebaseService {
         phoneNumber: creator.phoneNumber,
         joinedAt: timestamp,
         role: 'admin',
-        profileImage: creator.profileImageBase64 || creator.profileImage,
+        profileImage: creator.profileImageBase64 || creator.profileImage || null,
       });
 
       // Add other members
@@ -732,19 +772,19 @@ class FirebaseService {
             phoneNumber: user.phoneNumber,
             joinedAt: timestamp,
             role: 'member',
-            profileImage: user.profileImageBase64 || user.profileImage,
+            profileImage: user.profileImageBase64 || user.profileImage || null,
           });
         } else {
-          console.warn(`User with phone ${phoneNumber} not found, skipping`);
+          // User not found, skip this phone number
         }
       }
 
-      // Create group document
+      // Create group document (filter out undefined values)
       const groupDoc: Omit<Group, 'id'> = {
         name: groupData.name,
-        description: groupData.description,
-        coverImageBase64: groupData.coverImageBase64,
-        members,
+        ...(groupData.description && { description: groupData.description }),
+        ...(groupData.coverImageBase64 && { coverImageBase64: groupData.coverImageBase64 }),
+        members: this.cleanArray(members),
         createdBy,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -1039,8 +1079,11 @@ class FirebaseService {
   async updateGroup(groupId: string, updateData: Partial<CreateGroup>): Promise<Group> {
     try {
       const updateTimestamp = new Date().toISOString();
+      // Filter out undefined values before updating
+      const cleanUpdateData = this.cleanObject(updateData);
+      
       await this._groupsCollection.doc(groupId).update({
-        ...updateData,
+        ...cleanUpdateData,
         updatedAt: updateTimestamp,
       });
 
@@ -1676,11 +1719,17 @@ class FirebaseService {
 
       const docRef = await this._activitiesCollection.add(activity);
       
-      
-      return {
+      const createdActivity = {
         id: docRef.id,
         ...activity,
       };
+
+      // Send push notification for this activity
+      // Import is done dynamically to avoid circular dependencies
+      const { NotificationService } = await import('./notificationService');
+      await NotificationService.sendActivityNotification(createdActivity);
+      
+      return createdActivity;
     } catch (error) {
       console.error('Error creating activity:', error);
       throw new Error('Failed to create activity');

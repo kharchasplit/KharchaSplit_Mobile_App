@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { typography } from '../utils/typography';
-import { ensureDataUri, debugImageData } from '../utils/imageUtils';
+import { ensureDataUri } from '../utils/imageUtils';
 
 interface Props {
   route: {
@@ -45,7 +45,7 @@ export const ViewReceiptScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // Debug logging for receipt data
   React.useEffect(() => {
-    debugImageData(receiptBase64, 'ViewReceiptScreen');
+    // Receipt image validation and processing
   }, [receiptBase64, expenseDescription]);
 
   // Ensure proper data URI format
@@ -181,7 +181,7 @@ export const ViewReceiptScreen: React.FC<Props> = ({ route, navigation }) => {
               }}
               onError={(error) => {
                 console.error('Receipt image failed to load:', error.nativeEvent.error);
-                debugImageData(validReceiptUri, 'Failed Receipt in ViewReceiptScreen');
+                // Image failed to load
                 setImageError(true);
                 setImageLoading(false);
               }}

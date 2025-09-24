@@ -98,12 +98,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 <Image
                   source={{ uri: getProfileImageUri(user || {}) }}
                   style={styles.avatar}
-                  onError={(error) => {
+                  onError={() => {
                     // Image load error
-                      profileImageLength: (user?.profileImage || user?.profileImageBase64)?.length,
-                      firstName: user?.firstName,
-                      name: user?.name
-                    });
                   }}
                   onLoad={() => {
                   }}

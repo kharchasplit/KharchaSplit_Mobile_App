@@ -322,11 +322,6 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       await processContactsWithRegistration(contactsList);
       
       setContactsLoading(false);
-
-      // Process contacts in background (non-blocking)
-      setTimeout(() => {
-        filterContactsByFirebaseUsers(contactsList);
-      }, 50); // Small delay to ensure UI updates first
     } catch (error) {
       Alert.alert('Error', 'Failed to load contacts.');
       setContactsLoading(false);

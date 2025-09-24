@@ -35,6 +35,12 @@
 	<string></string>
 	<key>NSContactsUsageDescription</key>
 	<string>KharchaSplit needs access to your contacts to help you easily add friends to your groups who are already using the app.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>KharchaSplit needs access to your photo library to let you select profile pictures and expense receipts.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>KharchaSplit needs access to your camera to let you take photos for profile pictures and expense receipts.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>KharchaSplit uses Face ID to secure your app and protect your financial data.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

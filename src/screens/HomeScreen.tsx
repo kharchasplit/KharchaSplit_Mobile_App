@@ -24,6 +24,7 @@ import { firebaseService, Group as FirebaseGroup } from '../services/firebaseSer
 import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { ensureDataUri } from '../utils/imageUtils';
+import { FCMTokenManager } from '../services/fcmTokenManager';
 
 // (Interfaces remain the same)
 interface GroupDetail {
@@ -279,7 +280,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   useEffect(() => {
     loadGroupsAndBalance();
-  }, []);
+    
+    // Auto-refresh FCM token if user doesn't have one
+    const autoRefreshFCMToken = async () => {
+      if (!user?.id) return;
+      
+      try {
+        // Check if user has FCM token in Firebase
+        const hasToken = await FCMTokenManager.checkUserToken(user.id);
+        
+        if (!hasToken) {
+          await FCMTokenManager.getAndSaveToken(user.id);
+        }
+      } catch (error) {
+        // Silently handle FCM token initialization errors
+      }
+    };
+    
+    // Delay token refresh to not interfere with screen loading
+    setTimeout(autoRefreshFCMToken, 2000);
+  }, [user?.id]);
 
   const handleAddGroup = () => setShowCreateGroup(true);
   const handleCloseCreateGroup = () => setShowCreateGroup(false);

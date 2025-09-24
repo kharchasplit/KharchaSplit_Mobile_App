@@ -41,8 +41,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = (userData: UserProfile) => {
+  const login = async (userData: UserProfile) => {
     setUser(userData);
+    
+    // Initialize FCM for push notifications
+    try {
+      const { FCMService } = await import('../services/FCMService');
+      await FCMService.initialize(userData.id);
+    } catch (error) {
+      console.error('Failed to initialize FCM:', error);
+    }
   };
 
   const logout = async (): Promise<void> => {
@@ -70,6 +78,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const phoneNumber = user?.phoneNumber;
                 if (phoneNumber) {
                   await authService.clearOTP(phoneNumber);
+                }
+
+                // Clean up FCM
+                try {
+                  const { FCMService } = await import('../services/FCMService');
+                  await FCMService.cleanup();
+                } catch (error) {
+                  console.error('Failed to cleanup FCM:', error);
                 }
 
                 // Clear user from context

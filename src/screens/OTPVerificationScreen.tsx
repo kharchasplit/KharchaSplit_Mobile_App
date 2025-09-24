@@ -17,6 +17,7 @@ import { authService } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { wp, hp, ms, s, vs } from '../utils/deviceDimensions';
+import { NotificationPermissionHelper } from '../utils/NotificationPermissionHelper';
 
 
 interface OTPVerificationScreenProps {
@@ -108,6 +109,12 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             await userStorage.saveUser(userProfile);
             await userStorage.saveAuthToken(userProfile.id);
             login(userProfile); // Use AuthContext login
+            
+            // Request notification permission after successful login
+            setTimeout(async () => {
+              const result = await NotificationPermissionHelper.requestPermissionIfNeeded();
+              // No UI needed, just request the permission
+            }, 1000); // Small delay to ensure smooth navigation
           }
         } else {
           navigation.navigate('ProfileSetup', { phoneNumber });
