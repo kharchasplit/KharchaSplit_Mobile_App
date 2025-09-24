@@ -25,6 +25,7 @@ import { ensureDataUri } from '../utils/imageUtils';
 // --- RESPONSIVE ---
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import { typography } from '../utils/typography'; // Assuming this path is correct
+import { ExpensesSkeleton, BalancesSkeleton, SettlementSkeleton } from '../components/SkeletonLoader';
 
 // --- ANIMATION ---
 // Enable LayoutAnimation for Android
@@ -713,12 +714,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   
   const renderExpenses = () => {
     if (loading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primaryButton} />
-          <Text style={styles.loadingText}>Loading expenses...</Text>
-        </View>
-      );
+      return <ExpensesSkeleton />;
     }
 
     if (!expenses || expenses.length === 0) {
@@ -805,12 +801,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       .filter(Boolean) as any[];
 
     if (loading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primaryButton} />
-          <Text style={styles.loadingText}>Loading balances...</Text>
-        </View>
-      );
+      return <BalancesSkeleton />;
     }
 
     if (!balanceList.length) {
@@ -919,12 +910,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   const renderSettlement = () => {
     
     if (loading || groupMembers.length === 0) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primaryButton} />
-          <Text style={styles.loadingText}>Loading settlements...</Text>
-        </View>
-      );
+      return <SettlementSkeleton />;
     }
 
     if (settlements.length === 0) {

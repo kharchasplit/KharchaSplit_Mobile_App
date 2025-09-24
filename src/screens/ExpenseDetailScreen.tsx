@@ -14,6 +14,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ensureDataUri } from '../utils/imageUtils';
+import { ExpenseDetailSkeleton } from '../components/SkeletonLoader';
 
 interface ExpenseDetailScreenProps {
   route: {
@@ -130,7 +131,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
               source={{ uri: imageUri }} 
               style={styles(colors).participantAvatar}
               onError={() => {
-                // Avatar processing
+                // Handle avatar loading error
               }}
             />
           ) : (
@@ -157,17 +158,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
   if (loading) {
     return (
       <SafeAreaView style={styles(colors).container}>
-        <View style={styles(colors).header}>
-          <TouchableOpacity style={styles(colors).backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
-          </TouchableOpacity>
-          <Text style={styles(colors).headerTitle}>Expense Details</Text>
-          <View style={styles(colors).headerRight} />
-        </View>
-        <View style={styles(colors).loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primaryButton} />
-          <Text style={styles(colors).loadingText}>Loading expense details...</Text>
-        </View>
+        <ExpenseDetailSkeleton />
       </SafeAreaView>
     );
   }
@@ -215,7 +206,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
                   source={{ uri: imageUri }} 
                   style={styles(colors).paidByAvatar}
                   onError={() => {
-                    // Avatar processing
+                    // Handle avatar loading error
                   }}
                 />
               ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { firebaseService, Activity } from '../services/firebaseService';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ActivityScreenSkeleton } from '../components/SkeletonLoader';
 
 interface ActivityScreenProps {
   navigation: any;
@@ -38,41 +39,60 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  
+  // Animation for content fade in
+  const contentFadeAnim = useRef(new Animated.Value(0)).current;
 
   const loadActivities = useCallback(async () => {
     if (!user?.id) {
+      // Set initial loading to false even when no user
+      if (initialLoading) {
+        setInitialLoading(false);
+        Animated.timing(contentFadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
       setLoading(false);
       return;
     }
 
     try {
+      // Show skeleton loader for minimum duration (for better UX)
+      const minLoadingTime = new Promise<void>(resolve => setTimeout(() => resolve(), 1000));
       
       // Get user's groups first to get group activities
-      const userGroups = await firebaseService.getUserGroups(user.id);
-      const groupIds = userGroups.map(group => group.id);
+      const dataPromise = (async () => {
+        const userGroups = await firebaseService.getUserGroups(user.id);
+        const groupIds = userGroups.map(group => group.id);
+        
+        // Get both user activities and group activities
+        const [userActivities, groupActivities] = await Promise.all([
+          firebaseService.getUserActivities(user.id, 30),
+          firebaseService.getGroupActivities(groupIds, 20)
+        ]);
+
+        // Combine and deduplicate activities
+        const allActivities = [...userActivities, ...groupActivities];
+        const uniqueActivities = allActivities.filter((activity, index, self) => 
+          index === self.findIndex(a => a.id === activity.id)
+        );
+
+        // Sort by creation time (most recent first)
+        uniqueActivities.sort((a, b) => {
+          const aTime = new Date(a.createdAt).getTime();
+          const bTime = new Date(b.createdAt).getTime();
+          return bTime - aTime;
+        });
+
+        // Limit to 50 most recent
+        return uniqueActivities.slice(0, 50);
+      })();
       
-      // Get both user activities and group activities
-      const [userActivities, groupActivities] = await Promise.all([
-        firebaseService.getUserActivities(user.id, 30),
-        firebaseService.getGroupActivities(groupIds, 20)
-      ]);
-
-      // Combine and deduplicate activities
-      const allActivities = [...userActivities, ...groupActivities];
-      const uniqueActivities = allActivities.filter((activity, index, self) => 
-        index === self.findIndex(a => a.id === activity.id)
-      );
-
-      // Sort by creation time (most recent first)
-      uniqueActivities.sort((a, b) => {
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
-        return bTime - aTime;
-      });
-
-      // Limit to 50 most recent
-      const limitedActivities = uniqueActivities.slice(0, 50);
-      
+      // Wait for both data loading and minimum loading time
+      const [limitedActivities] = await Promise.all([dataPromise, minLoadingTime]);
       
       setActivities(limitedActivities);
     } catch (error) {
@@ -80,20 +100,45 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
     } finally {
       setLoading(false);
       setRefreshing(false);
+      
+      // Set initial loading to false after first load and animate content in
+      if (initialLoading) {
+        setInitialLoading(false);
+        Animated.timing(contentFadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
     }
-  }, [user?.id]);
+  }, [user?.id, initialLoading, contentFadeAnim]);
 
   useEffect(() => {
-    loadActivities();
-  }, [loadActivities]);
+    // Only load data if user is available
+    if (user?.id) {
+      loadActivities();
+    } else {
+      // If no user, still show skeleton briefly then show empty state
+      setTimeout(() => {
+        if (initialLoading) {
+          setInitialLoading(false);
+          Animated.timing(contentFadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        }
+      }, 1000);
+    }
+  }, [user?.id, loadActivities, initialLoading, contentFadeAnim]);
 
   // Refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      if (!loading) {
+      if (!loading && !initialLoading && user?.id) {
         loadActivities();
       }
-    }, [loadActivities, loading])
+    }, [loadActivities, loading, initialLoading, user?.id])
   );
 
   const onRefresh = useCallback(() => {
@@ -363,6 +408,19 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
     </View>
   );
 
+  // Show skeleton loader during initial loading
+  if (initialLoading) {
+    return (
+      <SafeAreaView style={styles(colors, scale).container}>
+        <StatusBar 
+          barStyle={colors.statusBarStyle} 
+          backgroundColor={colors.statusBarBackground} 
+        />
+        <ActivityScreenSkeleton />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles(colors, scale).container}>
       <StatusBar 
@@ -370,20 +428,21 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
         backgroundColor={colors.statusBarBackground} 
       />
       
-      {/* Header */}
-      <View style={styles(colors, scale).header}>
-        <Text style={styles(colors, scale).headerTitle}>Recent Activity</Text>
-      </View>
-
-
-      {/* Content */}
-      {loading && activities.length === 0 ? (
-        <View style={styles(colors, scale).loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primaryButton} />
-          <Text style={styles(colors, scale).loadingText}>Loading activities...</Text>
+      <Animated.View style={[styles(colors, scale).animatedContainer, { opacity: contentFadeAnim }]}>
+        {/* Header */}
+        <View style={styles(colors, scale).header}>
+          <Text style={styles(colors, scale).headerTitle}>Recent Activity</Text>
         </View>
-      ) : (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+
+
+        {/* Content */}
+        {loading && activities.length === 0 ? (
+          <View style={styles(colors, scale).loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primaryButton} />
+            <Text style={styles(colors, scale).loadingText}>Loading activities...</Text>
+          </View>
+        ) : (
+        <GestureHandlerRootView style={styles(colors, scale).gestureContainer}>
           <ScrollView
             style={styles(colors, scale).scrollView}
             contentContainerStyle={styles(colors, scale).scrollContent}
@@ -415,7 +474,8 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
           )}
           </ScrollView>
         </GestureHandlerRootView>
-      )}
+        )}
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -583,5 +643,11 @@ const styles = (colors: any, scale: (size: number) => number) =>
     },
     swipeableChildContainer: {
       backgroundColor: colors.cardBackground,
+    },
+    animatedContainer: {
+      flex: 1,
+    },
+    gestureContainer: {
+      flex: 1,
     },
   });

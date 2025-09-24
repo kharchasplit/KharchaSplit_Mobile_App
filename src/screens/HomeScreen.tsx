@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  Animated,
   // --- RESPONSIVE ---
   useWindowDimensions,
 } from 'react-native';
@@ -18,13 +19,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CreateNewGroupScreen } from './CreateNewGroupScreen';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { firebaseService, Group as FirebaseGroup } from '../services/firebaseService';
+import { firebaseService } from '../services/firebaseService';
 // --- RESPONSIVE ---
 // We now use this object to create scaled sizes
 import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { ensureDataUri } from '../utils/imageUtils';
 import { FCMTokenManager } from '../services/fcmTokenManager';
+import { HomeScreenSkeleton } from '../components/SkeletonLoader';
 
 // (Interfaces remain the same)
 interface GroupDetail {
@@ -132,6 +134,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // const isDarkMode = mode === 'dark';
   const { colors } = useTheme();
   const { user } = useAuth();
+  
+  // Animation for content fade in
+  const contentFadeAnim = useRef(new Animated.Value(0)).current;
   // --- END FIX ---
 
   // --- RESPONSIVE ---
@@ -159,7 +164,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
-  const [firebaseGroups, setFirebaseGroups] = useState<FirebaseGroup[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [overallBalance, setOverallBalance] = useState<OverallBalance>({
     netBalance: 0,
@@ -169,9 +173,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   });
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const loadGroupsFromFirebase = async () => {
     if (!user) {
+      // Set initial loading to false even when no user
+      if (initialLoading) {
+        setInitialLoading(false);
+        Animated.timing(contentFadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
       return;
     }
 
@@ -179,7 +193,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       setGroupsLoading(true);
       
       const userGroups = await firebaseService.getUserGroups(user.id);
-      setFirebaseGroups(userGroups);
       
       // Calculate balances for each group
       const convertedGroups: Group[] = await Promise.all(
@@ -199,6 +212,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             details = balance.details;
             
           } catch (expenseError) {
+            // Silently handle expense loading errors
           }
 
           return {
@@ -272,14 +286,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const loadGroupsAndBalance = async () => {
     setBalanceLoading(true);
     
+    // Show skeleton loader for minimum duration (for better UX)
+    const minLoadingTime = new Promise<void>(resolve => setTimeout(() => resolve(), 1000));
+    
     // Load groups from Firebase with real expense calculations
-    await loadGroupsFromFirebase();
+    const dataPromise = loadGroupsFromFirebase();
+    
+    // Wait for both data loading and minimum loading time
+    await Promise.all([dataPromise, minLoadingTime]);
     
     setBalanceLoading(false);
+    
+    // Set initial loading to false after first load and animate content in
+    if (initialLoading) {
+      setInitialLoading(false);
+      // Fade in content after skeleton disappears
+      Animated.timing(contentFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   useEffect(() => {
-    loadGroupsAndBalance();
+    // Only load data if user is available
+    if (user?.id) {
+      loadGroupsAndBalance();
+    } else {
+      // If no user, still show skeleton briefly then show empty state
+      setTimeout(() => {
+        if (initialLoading) {
+          setInitialLoading(false);
+          Animated.timing(contentFadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        }
+      }, 1000);
+    }
     
     // Auto-refresh FCM token if user doesn't have one
     const autoRefreshFCMToken = async () => {
@@ -304,8 +350,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const handleAddGroup = () => setShowCreateGroup(true);
   const handleCloseCreateGroup = () => setShowCreateGroup(false);
 
-  const handleSaveNewGroup = (newGroup: FirebaseGroup) => {
-    
+  const handleSaveNewGroup = (newGroup: any) => {
     // Convert Firebase group to legacy format for display
     const transformedGroup: Group = {
       id: newGroup.id,
@@ -321,8 +366,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       totalExpenses: newGroup.totalExpenses,
     };
     
-    // Add to both Firebase groups and legacy groups
-    setFirebaseGroups(prev => [newGroup, ...prev]);
+    // Add to groups
     setGroups(prev => [transformedGroup, ...prev]);
     setShowCreateGroup(false);
   };
@@ -354,6 +398,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // Use dynamic status bar style from theme colors
   // --- END FIX ---
 
+  // Show skeleton loader during initial loading
+  if (initialLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.statusBarBackground} />
+        <HomeScreenSkeleton />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
        {/* --- STATUS BAR FIX --- */}
@@ -361,8 +415,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
        <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.statusBarBackground} />
        {/* --- END FIX --- */}
        
-      {/* Header */}
-      <View style={styles.header}>
+      <Animated.View style={[{ flex: 1 }, { opacity: contentFadeAnim }]}>
+        {/* Header */}
+        <View style={styles.header}>
         <Text style={styles.headerTitle}>My Groups</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerButton} onPress={handleSearch}>
@@ -522,10 +577,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         />
       </TouchableOpacity>
 
-      {/* Create New Group Modal */}
-      <Modal visible={showCreateGroup} animationType="slide" presentationStyle="pageSheet">
-        <CreateNewGroupScreen onClose={handleCloseCreateGroup} onSave={handleSaveNewGroup} />
-      </Modal>
+        {/* Create New Group Modal */}
+        <Modal visible={showCreateGroup} animationType="slide" presentationStyle="pageSheet">
+          <CreateNewGroupScreen onClose={handleCloseCreateGroup} onSave={handleSaveNewGroup} />
+        </Modal>
+      </Animated.View>
     </SafeAreaView>
   );
 };
