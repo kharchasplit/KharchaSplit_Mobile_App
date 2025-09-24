@@ -26,6 +26,7 @@ import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { ensureDataUri } from '../utils/imageUtils';
 import { FCMTokenManager } from '../services/fcmTokenManager';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeScreenSkeleton } from '../components/SkeletonLoader';
 
 // (Interfaces remain the same)
@@ -134,7 +135,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // const isDarkMode = mode === 'dark';
   const { colors } = useTheme();
   const { user } = useAuth();
-  
+  const insets = useSafeAreaInsets();
+
   // Animation for content fade in
   const contentFadeAnim = useRef(new Animated.Value(0)).current;
   // --- END FIX ---
@@ -142,10 +144,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // --- RESPONSIVE ---
   // Get screen width
   const { width: screenWidth } = useWindowDimensions();
-  
+
   // Define base width and scaling function
   const baseWidth = 375;
   const scale = (size: number) => (screenWidth / baseWidth) * size;
+
+  // Calculate safe bottom padding for content
+  const getContentBottomPadding = () => {
+    // Base tab bar height + safe area bottom + extra padding
+    const baseTabBarHeight = 64;
+    const safeTabBarSpace = baseTabBarHeight + insets.bottom + scale(20);
+    return safeTabBarSpace;
+  };
 
   // Create an object of scaled font sizes using the imported typography file
   const scaledFontSize = {
@@ -461,9 +471,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       <ScrollView
         style={styles.scrollView}
-        // --- RESPONSIVE --- Correctly uses scaled size
-        contentContainerStyle={{ paddingBottom: scale(120) }}
+        // --- RESPONSIVE --- Account for tab bar height and floating button with safe area
+        contentContainerStyle={{
+          paddingBottom: getContentBottomPadding(), // Dynamic padding for safe tab bar space
+          flexGrow: 1
+        }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
         {/* Overall Balance */}
         <View style={styles.balanceSection}>
@@ -568,7 +582,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       </ScrollView>
 
       {/* Floating Button */}
-      <TouchableOpacity style={styles.floatingButton} onPress={handleAddGroup}>
+      <TouchableOpacity
+        style={[
+          styles.floatingButton,
+          { bottom: getContentBottomPadding() - scale(20) } // Dynamic positioning above safe tab bar area
+        ]}
+        onPress={handleAddGroup}
+      >
         <MaterialIcons
           name="add"
           // --- RESPONSIVE --- Correctly uses scaled size
@@ -762,7 +782,6 @@ const createStyles = (
     },
     floatingButton: {
       position: 'absolute',
-      bottom: scale(24),
       right: scale(24),
       width: scale(60),
       height: scale(60),

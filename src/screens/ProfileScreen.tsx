@@ -17,7 +17,7 @@ import { Settings } from './Settings';
 import { HelpandSupport } from './HelpandSupport';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationProps } from '../types/navigation';
 import { getProfileImageUri } from '../utils/imageUtils';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -34,6 +34,7 @@ type ProfileScreenProps = NavigationProps;
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { colors } = useTheme();
   const { user, logout, isLoading } = useAuth();
+  const insets = useSafeAreaInsets();
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [showReferralSystem, setShowReferralSystem] = useState(false);
@@ -85,7 +86,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         <Text style={styles.headerTitle}>My Profile</Text>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 64 + insets.bottom + 20 }} // Account for safe tab bar height
+      >
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileInfo}>

@@ -23,6 +23,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ActivityScreenSkeleton } from '../components/SkeletonLoader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ActivityScreenProps {
   navigation: any;
@@ -31,6 +32,7 @@ interface ActivityScreenProps {
 export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const baseWidth = 375;
   const scale = (size: number) => (screenWidth / baseWidth) * size;
@@ -445,7 +447,10 @@ export const ActivityScreen: React.FC<ActivityScreenProps> = ({ navigation }) =>
         <GestureHandlerRootView style={styles(colors, scale).gestureContainer}>
           <ScrollView
             style={styles(colors, scale).scrollView}
-            contentContainerStyle={styles(colors, scale).scrollContent}
+            contentContainerStyle={[
+              styles(colors, scale).scrollContent,
+              { paddingBottom: scale(64) + insets.bottom + scale(20) } // Dynamic safe area padding
+            ]}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
