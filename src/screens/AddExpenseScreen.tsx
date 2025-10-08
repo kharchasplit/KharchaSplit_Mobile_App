@@ -27,6 +27,7 @@ import { firebaseService, GroupExpense } from '../services/firebaseService';
 import { useAuth } from '../context/AuthContext';
 import { pickReceiptImage, formatFileSize, validateReceiptImage } from '../utils/imageUtils';
 import { PhotoLibraryPermissionHelper } from '../utils/PhotoLibraryPermissionHelper';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Enable LayoutAnimation for Android
 if (
@@ -98,6 +99,8 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   const [loading, setLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(true);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [expenseDate, setExpenseDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [receiptSize, setReceiptSize] = useState<number>(0);
 
   const [showPayerModal, setShowPayerModal] = useState(false);
@@ -382,6 +385,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
           isYou: m.isYou || false
         })),
         ...(receiptImage?.startsWith('data:') && { receiptBase64: receiptImage }),
+        date: expenseDate.toISOString(),
         createdAt: new Date().toISOString(),
         createdBy: user?.id || '',
         updatedAt: new Date().toISOString(),
@@ -595,7 +599,41 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
             <Text style={styles.currencyCode}>{selectedCurrency.code}</Text>
           </View>
         </View>
-        
+
+        {/* Date Picker */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Date</Text>
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={scaledFontSize.lg} color={colors.primaryText} />
+            <Text style={styles.datePickerText}>
+              {expenseDate.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+              })}
+            </Text>
+            <Ionicons name="chevron-down" size={scaledFontSize.lg} style={styles.dropdownIcon} />
+          </TouchableOpacity>
+        </View>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={expenseDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (selectedDate) {
+                setExpenseDate(selectedDate);
+              }
+            }}
+            maximumDate={new Date()}
+          />
+        )}
+
         {/* (Payer and Split Buttons unchanged) */}
         <View style={styles.rowButtonsContainer}>
           <TouchableOpacity style={styles.rowButton} onPress={() => setShowPayerModal(true)}>
@@ -710,7 +748,7 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
                 </View>
               </View>
               <TouchableOpacity onPress={handleRemoveReceipt}>
-                <Ionicons name="close-circle" size={scaledFontSize.xl} color={colors.errorText} />
+                <Ionicons name="close-circle" size={scaledFontSize.xl} color={colors.error} />
               </TouchableOpacity>
             </View>
           )}
@@ -944,7 +982,24 @@ const createStyles = (
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: scale(16),
-    gap: scale(8), 
+    gap: scale(8),
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.cardBackground,
+    borderRadius: scale(8),
+    backgroundColor: colors.cardBackground,
+    paddingHorizontal: scale(12),
+    paddingVertical: scale(12),
+    height: scale(48),
+    gap: scale(8),
+  },
+  datePickerText: {
+    flex: 1,
+    fontSize: fonts.body,
+    color: colors.primaryText,
   },
   rowButton: {
     flex: 1,
@@ -1124,6 +1179,6 @@ const createStyles = (
     marginTop: scale(4),
   },
   errorText: {
-    color: colors.errorText || '#FF3B30',
+    color: colors.error || '#FF3B30',
   },
 });

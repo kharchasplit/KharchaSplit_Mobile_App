@@ -729,64 +729,95 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       );
     }
 
+    // Group expenses by date
+    const groupedExpenses: Record<string, Expense[]> = {};
+    expenses.forEach((expense: Expense) => {
+      const expenseDate = expense.date || expense.createdAt;
+      const dateObj = expenseDate?.toDate ? expenseDate.toDate() : new Date(expenseDate);
+      const dateKey = dateObj.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+
+      if (!groupedExpenses[dateKey]) {
+        groupedExpenses[dateKey] = [];
+      }
+      groupedExpenses[dateKey].push(expense);
+    });
+
+    // Get sorted date keys (most recent first)
+    const sortedDateKeys = Object.keys(groupedExpenses).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateB.getTime() - dateA.getTime();
+    });
+
     return (
       <>
-        {expenses.map((expense: Expense) => {
-          const category =
-            categoryMapping[expense.category?.id] || categoryMapping.default;
-          const yourShare =
-            expense.participants?.find((p: any) => 
-              (p.userId === currentUserId || p.id === currentUserId)
-            )?.amount || 0;
-          const date = expense.createdAt?.toDate
-            ? expense.createdAt.toDate().toLocaleDateString()
-            : 'Recent';
-          
-          // Get payment status for this expense
-          const paymentStatus = getExpensePaymentStatus(expense);
+        {sortedDateKeys.map((dateKey) => (
+          <View key={dateKey}>
+            {/* Date Header */}
+            <View style={styles.dateHeader}>
+              <Text style={styles.dateHeaderText}>{dateKey}</Text>
+              <View style={styles.dateHeaderLine} />
+            </View>
 
-          return (
-            <TouchableOpacity
-              key={expense.id}
-              style={styles.expenseItem}
-              onPress={() =>
-                navigation.navigate('ExpenseDetail', {
-                  expense, 
-                  group: {
-                    ...group,
-                    members: groupMembers
-                  }
-                })
-              }>
-              <View
-                style={[styles.expenseIcon, {backgroundColor: category.color}]}>
-                <Text style={styles.expenseIconText}>{category.emoji}</Text>
-              </View>
-              <View style={styles.expenseDetails}>
-                <View style={styles.expenseTitleRow}>
-                  <Text style={styles.expenseTitle} numberOfLines={1}>{expense.description}</Text>
-                  {paymentStatus.label && (
-                    <View style={[styles.statusTag, { backgroundColor: paymentStatus.color + '20', borderColor: paymentStatus.color }]}>
-                      <Text style={[styles.statusTagText, { color: paymentStatus.color }]}>
-                        {paymentStatus.label}
-                      </Text>
+            {/* Expenses for this date */}
+            {groupedExpenses[dateKey].map((expense: Expense) => {
+              const category =
+                categoryMapping[expense.category?.id] || categoryMapping.default;
+              const yourShare =
+                expense.participants?.find((p: any) =>
+                  (p.userId === currentUserId || p.id === currentUserId)
+                )?.amount || 0;
+
+              // Get payment status for this expense
+              const paymentStatus = getExpensePaymentStatus(expense);
+
+              return (
+                <TouchableOpacity
+                  key={expense.id}
+                  style={styles.expenseItem}
+                  onPress={() =>
+                    navigation.navigate('ExpenseDetail', {
+                      expense,
+                      group: {
+                        ...group,
+                        members: groupMembers
+                      }
+                    })
+                  }>
+                  <View
+                    style={[styles.expenseIcon, {backgroundColor: category.color}]}>
+                    <Text style={styles.expenseIconText}>{category.emoji}</Text>
+                  </View>
+                  <View style={styles.expenseDetails}>
+                    <View style={styles.expenseTitleRow}>
+                      <Text style={styles.expenseTitle} numberOfLines={1}>{expense.description}</Text>
+                      {paymentStatus.label && (
+                        <View style={[styles.statusTag, { backgroundColor: paymentStatus.color + '20', borderColor: paymentStatus.color }]}>
+                          <Text style={[styles.statusTagText, { color: paymentStatus.color }]}>
+                            {paymentStatus.label}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-                <Text style={styles.expenseSubtitle}>
-                  Paid by {expense.paidBy === currentUserId ? 'You' : expense.paidByName}
-                </Text>
-                <Text style={styles.expenseDate}>{date}</Text>
-              </View>
-              <View style={styles.expenseAmounts}>
-                <Text style={styles.expenseAmount}>
-                  ₹{(expense.amount || 0).toFixed(0)}
-                </Text>
-                <Text style={styles.expenseShare}>₹{yourShare.toFixed(0)}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+                    <Text style={styles.expenseSubtitle}>
+                      Paid by {expense.paidBy === currentUserId ? 'You' : expense.paidByName}
+                    </Text>
+                  </View>
+                  <View style={styles.expenseAmounts}>
+                    <Text style={styles.expenseAmount}>
+                      ₹{(expense.amount || 0).toFixed(0)}
+                    </Text>
+                    <Text style={styles.expenseShare}>₹{yourShare.toFixed(0)}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
       </>
     );
   };
@@ -1465,6 +1496,25 @@ const createStyles = (
     },
     expenseSubtitle: {fontSize: fonts.xs, color: colors.secondaryText, marginTop: scale(2)},
     expenseDate: {fontSize: fonts.xs, color: colors.secondaryText, marginTop: scale(2)},
+    dateHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: scale(16),
+      marginBottom: scale(8),
+      gap: scale(12),
+    },
+    dateHeaderText: {
+      fontSize: fonts.caption,
+      fontWeight: '600',
+      color: colors.secondaryText,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    dateHeaderLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.background,
+    },
     expenseAmounts: {alignItems: 'flex-end'},
     expenseAmount: {fontSize: fonts.body, fontWeight: '600', color: colors.primaryText},
     expenseShare: {fontSize: fonts.caption, color: colors.primaryButton, marginTop: scale(2)},

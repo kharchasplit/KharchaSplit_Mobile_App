@@ -128,6 +128,7 @@ export interface GroupExpense {
   splitType: string;
   participants: ExpenseParticipant[];
   receiptBase64?: string;
+  date: string; // Date of the expense (ISO string format)
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -239,10 +240,12 @@ class FirebaseService {
       };
 
       const docRef = await this._usersCollection.add(userDoc);
-      
+
       const userProfile: UserProfile = {
-        id: docRef.id,
         ...userDoc,
+        id: docRef.id,
+        phoneNumber: userData.phoneNumber,
+        name: userData.name,
       };
 
       return userProfile;
@@ -500,49 +503,55 @@ class FirebaseService {
    */
   async getUsersByPhoneNumbers(phoneNumbers: string[]): Promise<UserProfile[]> {
     try {
-      
+      console.log('[Firebase] getUsersByPhoneNumbers called with', phoneNumbers.length, 'numbers');
+      console.log('[Firebase] First 3 numbers:', phoneNumbers.slice(0, 3));
+
       if (phoneNumbers.length === 0) {
         return [];
       }
 
       const users: UserProfile[] = [];
-      const batchSize = 30; // Increased batch size for better performance
-      
+      const batchSize = 10; // Firebase 'in' operator supports max 10 items
+
       // Process all batches in parallel for faster lookup
       const batchPromises: Promise<void>[] = [];
-      
+
       for (let i = 0; i < phoneNumbers.length; i += batchSize) {
         const batch = phoneNumbers.slice(i, i + batchSize);
-        
+
         const batchPromise = (async () => {
           try {
+            console.log('[Firebase] Querying batch:', batch);
             const querySnapshot = await this._usersCollection
               .where('phoneNumber', 'in', batch)
               .where('isActive', '==', true)
               .get();
 
+            console.log('[Firebase] Batch query returned', querySnapshot.docs.length, 'users');
             querySnapshot.docs.forEach(doc => {
               const userData = doc.data();
+              console.log('[Firebase] Found user:', userData.phoneNumber, userData.name);
               users.push({
                 id: doc.id,
                 ...userData,
               } as UserProfile);
             });
           } catch (batchError) {
-            console.warn('Error in batch query for batch:', batch);
+            console.error('[Firebase] Error in batch query for batch:', batch, batchError);
             // Skip this batch instead of individual lookups for performance
           }
         })();
-        
+
         batchPromises.push(batchPromise);
       }
-      
+
       // Wait for all batches to complete
       await Promise.all(batchPromises);
 
+      console.log('[Firebase] Total users found:', users.length);
       return users;
     } catch (error) {
-      console.error('Error getting users by phone numbers:', error);
+      console.error('[Firebase] Error getting users by phone numbers:', error);
       return [];
     }
   }
@@ -756,7 +765,7 @@ class FirebaseService {
         phoneNumber: creator.phoneNumber,
         joinedAt: timestamp,
         role: 'admin',
-        profileImage: creator.profileImageBase64 || creator.profileImage || null,
+        profileImage: creator.profileImageBase64 || creator.profileImage || undefined,
       });
 
       // Add other members
@@ -772,7 +781,7 @@ class FirebaseService {
             phoneNumber: user.phoneNumber,
             joinedAt: timestamp,
             role: 'member',
-            profileImage: user.profileImageBase64 || user.profileImage || null,
+            profileImage: user.profileImageBase64 || user.profileImage || undefined,
           });
         } else {
           // User not found, skip this phone number
@@ -1135,49 +1144,72 @@ class FirebaseService {
    */
   async addGroupMember(groupId: string, phoneNumber: string): Promise<Group> {
     try {
+      console.log(`[addGroupMember] Starting - GroupId: ${groupId}, Phone: ${phoneNumber}`);
+
       const group = await this.getGroupById(groupId);
       if (!group) {
+        console.error(`[addGroupMember] Group not found: ${groupId}`);
         throw new Error('Group not found');
       }
+      console.log(`[addGroupMember] Group found: ${group.name}, Members count: ${group.members.length}`);
 
       const user = await this.getUserByPhone(phoneNumber);
       if (!user) {
-        throw new Error('User not found');
+        console.error(`[addGroupMember] User not found with phone: ${phoneNumber}`);
+        throw new Error(`User with phone ${phoneNumber} not found in database`);
       }
+      console.log(`[addGroupMember] User found: ${user.name} (ID: ${user.id})`);
 
       // Check if user is already a member
       const existingMember = group.members.find(member => member.userId === user.id);
       if (existingMember) {
-        throw new Error('User is already a member of this group');
+        console.warn(`[addGroupMember] User already a member: ${user.name}`);
+        throw new Error(`${user.name} is already a member of this group`);
       }
 
+      // Build member object, only including profileImage if it exists
       const newMember: GroupMember = {
         userId: user.id,
         name: user.name,
         phoneNumber: user.phoneNumber,
         joinedAt: new Date().toISOString(),
         role: 'member',
-        profileImage: user.profileImageBase64 || user.profileImage,
+        ...(user.profileImageBase64 && { profileImage: user.profileImageBase64 }),
+        ...(!user.profileImageBase64 && user.profileImage && { profileImage: user.profileImage }),
       };
 
-      const updatedMembers = [...group.members, newMember];
-      
+      // Clean the member object to ensure no undefined/null values
+      const cleanedMember = this.cleanObject(newMember);
+
+      const updatedMembers = [...group.members, cleanedMember];
+      console.log(`[addGroupMember] Updating group with ${updatedMembers.length} members`);
+      console.log(`[addGroupMember] New member data:`, JSON.stringify(cleanedMember, null, 2));
+
       await this._groupsCollection.doc(groupId).update({
         members: updatedMembers,
         updatedAt: new Date().toISOString(),
       });
 
-      
+      console.log(`[addGroupMember] Successfully updated group in Firestore`);
+
       // Return updated group
       const updatedGroup = await this.getGroupById(groupId);
       if (!updatedGroup) {
+        console.error(`[addGroupMember] Failed to fetch updated group`);
         throw new Error('Failed to fetch updated group');
       }
 
+      console.log(`[addGroupMember] Success! Member ${user.name} added to ${group.name}`);
       return updatedGroup;
-    } catch (error) {
-      console.error('Error adding group member:', error);
-      throw new Error('Failed to add member to group');
+    } catch (error: any) {
+      console.error('[addGroupMember] Error:', error.message || error);
+      console.error('[addGroupMember] Error details:', {
+        code: error.code,
+        name: error.name,
+        stack: error.stack
+      });
+      // Preserve the original error message
+      throw error;
     }
   }
 
@@ -1285,7 +1317,7 @@ class FirebaseService {
       const expense: GroupExpense = {
         id: docRef.id,
         ...expenseDoc,
-      };
+      } as GroupExpense;
 
       
       // Create activity log for expense creation

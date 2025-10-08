@@ -28,6 +28,7 @@ import { ensureDataUri } from '../utils/imageUtils';
 interface GroupData {
   name: string;
   description: string;
+  numberOfMembers: string;
   coverImage: string | null;
   coverImageBase64: string | null;
 }
@@ -48,6 +49,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const [groupData, setGroupData] = useState<GroupData>({
     name: '',
     description: '',
+    numberOfMembers: '',
     coverImage: null,
     coverImageBase64: null,
   });
@@ -632,15 +634,42 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           />
         </View>
 
+        {/* Number of Members */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Number of Members (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={groupData.numberOfMembers}
+            onChangeText={value => {
+              // Only allow numbers
+              const numericValue = value.replace(/[^0-9]/g, '');
+              handleInputChange('numberOfMembers', numericValue);
+            }}
+            placeholder="e.g., 4"
+            placeholderTextColor={colors.secondaryText}
+            keyboardType="numeric"
+            maxLength={3}
+          />
+          <Text style={styles.helperText}>
+            This helps you plan how many people you'll split expenses with
+          </Text>
+        </View>
+
         {/* Add Members Section */}
         <View style={styles.membersSection}>
           <Text style={styles.sectionTitle}>
             Add Members {selectedMembers.length > 0 && `(${selectedMembers.length} selected)`}
           </Text>
-          
+
           {permissionState.status === 'granted' && (
             <Text style={styles.sectionSubtitle}>
-              {filteredContacts.length > 0 ? (
+              {groupData.numberOfMembers && parseInt(groupData.numberOfMembers) > 0 ? (
+                selectedMembers.length >= parseInt(groupData.numberOfMembers) ? (
+                  `✓ You've added ${selectedMembers.length}/${groupData.numberOfMembers} members`
+                ) : (
+                  `Add ${parseInt(groupData.numberOfMembers) - selectedMembers.length} more to reach your planned ${groupData.numberOfMembers} members`
+                )
+              ) : filteredContacts.length > 0 ? (
                 `${filteredContacts.filter(c => c.isRegistered).length} registered • ${filteredContacts.filter(c => !c.isRegistered).length} can be invited`
               ) : (
                 'Select registered contacts or invite friends to join KharchaSplit'
@@ -908,6 +937,12 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: colors.cardBackground,
     },
     descriptionInput: { height: 100, textAlignVertical: 'top' },
+    helperText: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 6,
+      fontStyle: 'italic',
+    },
     membersSection: { paddingHorizontal: 16, marginBottom: 24 },
     sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 8 },
     sectionSubtitle: { 

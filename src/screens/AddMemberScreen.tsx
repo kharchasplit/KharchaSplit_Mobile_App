@@ -58,6 +58,9 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    console.log('[AddMember] Screen mounted');
+    console.log('[AddMember] Group prop:', JSON.stringify(group));
+    console.log('[AddMember] Has contacts permission:', hasContactsPermission);
     requestContactsPermission();
   }, []);
 
@@ -128,12 +131,23 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const processContactsWithRegistration = async (contactsList: Contact[]) => {
     try {
+      console.log('[AddMember] Starting processContactsWithRegistration with', contactsList.length, 'contacts');
+      console.log('[AddMember] Group ID:', group.id);
+
       // Get current group members to exclude them
       const currentGroup = await firebaseService.getGroupById(group.id);
-      const existingMemberPhones = new Set(currentGroup.members.map(member => 
+      if (!currentGroup) {
+        console.error('[AddMember] Group not found for ID:', group.id);
+        Alert.alert('Error', 'Group not found. Please go back and try again.');
+        return;
+      }
+
+      console.log('[AddMember] Current group members:', currentGroup.members.length);
+
+      const existingMemberPhones = new Set(currentGroup.members.map(member =>
         normalizePhoneNumber(member.phoneNumber)
       ));
-      
+
       // Process all contacts first
       const allContacts: FilteredContact[] = [];
       const phoneNumbers: string[] = [];
@@ -142,12 +156,14 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
       contactsList.forEach(contact => {
         if (contact.phoneNumbers?.length > 0 && !processedContactIds.has(contact.recordID)) {
           processedContactIds.add(contact.recordID);
-          
+
           const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          
+
           // Skip if contact is already a member or is current user
           if (primaryPhone.length === 10 && !existingMemberPhones.has(primaryPhone)) {
-            phoneNumbers.push(primaryPhone);
+            // Format phone number with country code for Firebase query
+            const formattedPhone = `+91${primaryPhone}`;
+            phoneNumbers.push(formattedPhone);
             allContacts.push({
               ...contact,
               isRegistered: false,
@@ -158,16 +174,21 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
       });
 
       if (phoneNumbers.length > 0) {
-        // Get registered users from Firebase
+        console.log('[AddMember] Querying Firebase for', phoneNumbers.length, 'phone numbers');
+        console.log('[AddMember] Sample phone numbers:', phoneNumbers.slice(0, 3));
+
+        // Get registered users from Firebase (with +91 format)
         const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
-        
+        console.log('[AddMember] Found', registeredUsers.length, 'registered users');
+
         const registeredPhones = new Set<string>();
         const userProfileMap: { [key: string]: any } = {};
-        
-        // Process registered users
+
+        // Process registered users - map by normalized phone for easy lookup
         registeredUsers.forEach(userProfile => {
-          registeredPhones.add(userProfile.phoneNumber);
-          userProfileMap[userProfile.phoneNumber] = userProfile;
+          const normalizedPhone = normalizePhoneNumber(userProfile.phoneNumber);
+          registeredPhones.add(normalizedPhone);
+          userProfileMap[normalizedPhone] = userProfile;
         });
 
         // Update all contacts with registration status
@@ -175,7 +196,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           .map(contact => {
             const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
             const isRegistered = registeredPhones.has(primaryPhone);
-            
+
             // Skip current user
             if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
               return null;
@@ -196,13 +217,16 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           return 0;
         });
 
+        console.log('[AddMember] Setting', sortedContacts.length, 'filtered contacts');
+        console.log('[AddMember] Registered contacts:', sortedContacts.filter(c => c.isRegistered).length);
         setFilteredContacts(sortedContacts);
       } else {
+        console.log('[AddMember] No valid phone numbers found, setting', allContacts.length, 'contacts');
         // No valid phone numbers, show all contacts
         setFilteredContacts(allContacts);
       }
     } catch (error) {
-      console.error('Error processing contacts with registration:', error);
+      console.error('[AddMember] Error processing contacts with registration:', error);
       // Show contacts without registration status as fallback
       const basicContacts: FilteredContact[] = [];
       contactsList.forEach(contact => {
@@ -283,38 +307,54 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
     }
 
     setLoading(true);
-    
+
     try {
       const results = [];
-      
+
       for (const contact of selectedMembers) {
         // Only add registered members (already validated in handleSelectMember)
         if (contact.isRegistered && contact.phoneNumbers && contact.phoneNumbers.length > 0) {
           const phoneNumber = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          // Format for Firebase (add +91 if needed)
-          const formattedPhone = phoneNumber.length === 10 ? `+91${phoneNumber}` : `+${phoneNumber}`;
-          
+          // Use the phone number from userProfile if available (more reliable)
+          const formattedPhone = contact.userProfile?.phoneNumber ||
+            (phoneNumber.length === 10 ? `+91${phoneNumber}` : `+${phoneNumber}`);
+
+          console.log(`[AddMember] Attempting to add:`, {
+            displayName: contact.displayName,
+            userProfileName: contact.userProfile?.name,
+            formattedPhone,
+            groupId: group.id
+          });
+
           try {
             const result = await firebaseService.addGroupMember(group.id, formattedPhone);
-            results.push({ 
-              contact, 
-              success: true, 
+            console.log(`[AddMember] Successfully added ${contact.displayName}`);
+            results.push({
+              contact,
+              success: true,
               result,
-              name: contact.userProfile?.name || contact.displayName 
+              name: contact.userProfile?.name || contact.displayName
             });
           } catch (error: any) {
-            console.error(`Failed to add ${contact.displayName}:`, error);
-            results.push({ 
-              contact, 
-              success: false, 
+            console.error(`[AddMember] Failed to add ${contact.displayName}:`, error);
+            console.error(`[AddMember] Error details:`, {
+              message: error.message,
+              phone: formattedPhone,
+              isRegistered: contact.isRegistered,
+              hasUserProfile: !!contact.userProfile
+            });
+            results.push({
+              contact,
+              success: false,
               error: error.message || 'Failed to add member',
-              name: contact.userProfile?.name || contact.displayName 
+              name: contact.userProfile?.name || contact.displayName
             });
           }
         } else {
-          results.push({ 
-            contact, 
-            success: false, 
+          console.warn(`[AddMember] Skipping ${contact.displayName}: not registered or no phone`);
+          results.push({
+            contact,
+            success: false,
             error: 'Invalid contact or not registered',
             name: contact.displayName
           });
