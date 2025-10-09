@@ -25,6 +25,8 @@ interface ExpenseDetailScreenProps {
   };
   navigation: {
     goBack: () => void;
+    // FIX 1: Added navigate to the navigation prop type
+    navigate: (screen: string, params?: object) => void;
   };
 }
 
@@ -57,20 +59,16 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
       
       setExpenseData(expense);
       
-      // Handle both formats of group members
       let members = group.members || [];
       
-      // If we have Firebase format, transform it
       if (members.length > 0 && members[0].userId && !members[0].id) {
         members = members.map((member: any) => ({
           ...member,
           id: member.userId,
           email: member.phoneNumber || member.email,
-          // Keep the avatar field for compatibility
           avatar: member.profileImage || member.avatar,
         }));
       } else {
-        // Also ensure avatar field is properly mapped for other formats
         members = members.map((member: any) => ({
           ...member,
           avatar: member.profileImage || member.avatar,
@@ -78,7 +76,6 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
       }
       
       setGroupMembers(members);
-      
       
     } catch (error) {
       Alert.alert('Error', 'Failed to load expense details');
@@ -111,13 +108,11 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
 
 
   const renderParticipant = (participant: any) => {
-    // Look for member using both userId and id for compatibility
     const participantId = participant.userId || participant.id;
     const member = groupMembers.find((m) => 
       m.userId === participantId || m.id === participantId
     );
 
-    // Use participant data directly if member not found but participant has name
     const displayName = member?.name || participant.name || 'Unknown User';
     const displayEmail = member?.email || member?.phoneNumber || participant.email || '';
     const displayAvatar = member?.avatar || participant.avatar;
@@ -166,7 +161,12 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
   const currentExpense = expenseData || expense;
   const category =
     categoryMapping[currentExpense.category?.id] || categoryMapping.default;
-  const paidByMember = groupMembers.find((m) => m.userId === currentExpense.paidBy);
+    
+  // FIX 2: Made the user lookup consistent by checking both `userId` and `id`
+  const paidByMember = groupMembers.find(
+    (m) => m.userId === currentExpense.paidBy || m.id === currentExpense.paidBy
+  );
+
 
   return (
     <SafeAreaView style={styles(colors).container}>
@@ -262,9 +262,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
               onPress={() => {
                 const receiptData = currentExpense.receiptUrl || currentExpense.receiptBase64;
                 const formattedReceipt = ensureDataUri(receiptData);
-                
-                // Navigate to receipt view
-                
+                                
                 if (formattedReceipt) {
                   navigation.navigate('ViewReceipt', {
                     receiptBase64: formattedReceipt,
@@ -304,7 +302,7 @@ export const ExpenseDetailScreen: React.FC<ExpenseDetailScreenProps> = ({ route,
   );
 };
 
-// Dynamic styles
+// ... (styles remain the same)
 const styles = (colors: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },

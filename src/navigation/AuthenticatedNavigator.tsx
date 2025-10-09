@@ -21,6 +21,8 @@ import { ExpenseDetailScreen } from '../screens/ExpenseDetailScreen';
 import { ViewReceiptScreen } from '../screens/ViewReceiptScreen';
 import { AllGroupsScreen } from '../screens/AllGroupsScreen';
 import { PaymentHistoryScreen } from '../screens/PaymentHistoryScreen';
+import { PersonalExpensesScreen } from '../screens/PersonalExpensesScreen';
+import { AddPersonalExpenseScreen } from '../screens/AddPersonalExpenseScreen';
 
 type TabParamList = {
   Home: undefined;
@@ -39,6 +41,8 @@ type StackParamList = {
   ViewReceipt: { receiptBase64: string; expenseDescription?: string };
   AllGroups: undefined;
   PaymentHistory: undefined;
+  PersonalExpenses: undefined;
+  AddPersonalExpense: { onReturn?: () => void };
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -121,6 +125,8 @@ export const HomeStackNavigator: React.FC = () => {
       <Stack.Screen name="ViewReceipt" component={ViewReceiptScreen} />
       <Stack.Screen name="AllGroups" component={AllGroupsScreen} />
       <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
+      <Stack.Screen name="PersonalExpenses" component={PersonalExpensesScreen} />
+      <Stack.Screen name="AddPersonalExpense" component={AddPersonalExpenseScreen} />
     </Stack.Navigator>
   );
 };

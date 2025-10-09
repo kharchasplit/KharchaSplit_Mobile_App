@@ -96,14 +96,14 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
   const normalizePhoneNumber = (phoneNumber: string): string => {
     // Remove all non-digit characters
     const cleaned = phoneNumber.replace(/\D/g, '');
-    
+
     // If it starts with country code, remove it to get 10-digit number
     if (cleaned.startsWith('91') && cleaned.length === 12) {
       return cleaned.substring(2);
     } else if (cleaned.startsWith('0') && cleaned.length === 11) {
       return cleaned.substring(1);
     }
-    
+
     return cleaned;
   };
 
@@ -248,7 +248,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
   const formatPhoneNumber = (phoneNumber: string): string => {
     // Remove all non-digit characters
     const cleaned = phoneNumber.replace(/\D/g, '');
-    
+
     // If number starts with country code, keep it as is
     // If it's 10 digits, add +91 for India
     if (cleaned.length === 10) {
@@ -258,7 +258,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
     } else if (cleaned.length > 10) {
       return `+${cleaned}`;
     }
-    
+
     return cleaned;
   };
 
@@ -267,7 +267,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
     if (!contact.isRegistered) {
       return;
     }
-    
+
     const exists = selectedMembers.find(m => m.recordID === contact.recordID);
     if (exists) {
       setSelectedMembers(prev => prev.filter(m => m.recordID !== contact.recordID));
@@ -284,7 +284,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
       }
 
       const message = `Hi! Join me on KharchaSplit to easily split expenses and manage group payments. Use my referral code: ${user.referralCode}\n\nDownload the app: [App Store/Play Store Link]`;
-      
+
       await Share.share({
         message,
         title: 'Join KharchaSplit',
@@ -360,14 +360,14 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           });
         }
       }
-      
+
       // Show results summary
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
-      
+
       if (successful > 0 && failed === 0) {
         Alert.alert(
-          '✅ Success', 
+          '✅ Success',
           `Successfully added ${successful} member${successful > 1 ? 's' : ''} to the group!`,
           [
             {
@@ -384,7 +384,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           .filter(r => !r.success)
           .map(r => `${r.name} (${r.error})`)
           .join('\n');
-          
+
         Alert.alert(
           '⚠️ Partial Success',
           `Added ${successful} member${successful > 1 ? 's' : ''} successfully.\n\nFailed to add:\n${failedNames}`,
@@ -402,7 +402,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           .filter(r => !r.success)
           .map(r => `${r.name} (${r.error})`)
           .join('\n');
-          
+
         Alert.alert(
           '❌ Failed',
           `Failed to add members:\n${failedNames}`,
@@ -411,11 +411,11 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
           ]
         );
       }
-      
+
     } catch (error) {
       console.error('Error adding members:', error);
       Alert.alert(
-        '❌ Error', 
+        '❌ Error',
         'An unexpected error occurred while adding members. Please try again.'
       );
     } finally {
@@ -423,9 +423,13 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
-  const searchFilteredContacts = filteredContacts.filter(contact =>
-    (contact.userProfile?.name || contact.displayName).toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const searchFilteredContacts = filteredContacts.filter(contact => {
+    const name = (contact.userProfile?.name || contact.displayName).toLowerCase();
+    const phone = contact.phoneNumbers?.[0]?.number || '';
+    const query = searchQuery.toLowerCase();
+
+    return name.includes(query) || phone.includes(query);
+  });
 
   return (
     <SafeAreaView style={styles(colors).container}>
@@ -476,7 +480,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
             const isSelected = selectedMembers.find(m => m.recordID === contact.recordID);
             const phoneNumber = contact.phoneNumbers?.[0]?.number || 'No phone number';
             const displayName = contact.userProfile?.name || contact.displayName;
-            
+
             return (
               <View key={contact.recordID} style={styles(colors).contactItem}>
                 <View style={styles(colors).contactInfo}>
@@ -489,7 +493,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
                       </Text>
                     </View>
                   )}
-                  
+
                   <View style={styles(colors).contactDetails}>
                     <Text style={styles(colors).contactName}>
                       {displayName}
@@ -505,7 +509,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
                     )}
                   </View>
                 </View>
-                
+
                 <View style={styles(colors).contactActions}>
                   {contact.isRegistered ? (
                     // Registered user - show Add/Remove button
@@ -517,10 +521,10 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
                       onPress={() => handleSelectMember(contact)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons 
-                        name={isSelected ? "checkmark" : "add"} 
-                        size={16} 
-                        color="white" 
+                      <Ionicons
+                        name={isSelected ? "checkmark" : "add"}
+                        size={16}
+                        color="white"
                       />
                       <Text style={styles(colors).actionButtonText}>
                         {isSelected ? 'Added' : 'Add'}
@@ -680,12 +684,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       justifyContent: 'center',
       alignItems: 'center',
     },
-    contactImagePlaceholderText: { 
-      color: colors.primaryButton, 
+    contactImagePlaceholderText: {
+      color: colors.primaryButton,
       fontWeight: 'bold',
       fontSize: 18,
     },
-    contactName: { 
+    contactName: {
       color: colors.primaryText,
       fontSize: 16,
       fontWeight: '600',
@@ -745,8 +749,8 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    addSelectedButtonText: { 
-      color: colors.primaryButtonText, 
+    addSelectedButtonText: {
+      color: colors.primaryButtonText,
       fontWeight: '600',
       fontSize: 16,
     },

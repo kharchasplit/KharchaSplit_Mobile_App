@@ -184,6 +184,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [personalExpensesSummary, setPersonalExpensesSummary] = useState({
+    totalExpenses: 0,
+    expenseCount: 0,
+  });
 
   const loadGroupsFromFirebase = async () => {
     if (!user) {
@@ -293,20 +297,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     });
   };
 
+  const loadPersonalExpensesSummary = async () => {
+    if (!user?.id) return;
+
+    try {
+      const summary = await firebaseService.getPersonalExpensesSummary(user.id);
+      setPersonalExpensesSummary({
+        totalExpenses: summary.totalExpenses,
+        expenseCount: summary.expenseCount,
+      });
+    } catch (error) {
+      // Silently handle errors
+    }
+  };
+
   const loadGroupsAndBalance = async () => {
     setBalanceLoading(true);
-    
+
     // Show skeleton loader for minimum duration (for better UX)
     const minLoadingTime = new Promise<void>(resolve => setTimeout(() => resolve(), 1000));
-    
+
     // Load groups from Firebase with real expense calculations
     const dataPromise = loadGroupsFromFirebase();
-    
+
+    // Load personal expenses summary
+    const personalExpensesPromise = loadPersonalExpensesSummary();
+
     // Wait for both data loading and minimum loading time
-    await Promise.all([dataPromise, minLoadingTime]);
-    
+    await Promise.all([dataPromise, personalExpensesPromise, minLoadingTime]);
+
     setBalanceLoading(false);
-    
+
     // Set initial loading to false after first load and animate content in
     if (initialLoading) {
       setInitialLoading(false);
@@ -501,6 +522,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           )}
         </View>
+
+        {/* Personal Expenses Card */}
+        <TouchableOpacity
+          style={styles.personalExpensesCard}
+          onPress={() => navigation.navigate('PersonalExpenses')}
+        >
+          <View style={styles.personalExpensesHeader}>
+            <View style={styles.personalExpensesIcon}>
+              <MaterialIcons name="receipt-long" size={scaledFontSize.lg} color={colors.primaryButtonText} />
+            </View>
+            <View style={styles.personalExpensesInfo}>
+              <Text style={styles.personalExpensesTitle}>Personal Expenses</Text>
+              <Text style={styles.personalExpensesSubtitle}>
+                {personalExpensesSummary.expenseCount} expense{personalExpensesSummary.expenseCount !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <View style={styles.personalExpensesAmount}>
+              <Text style={styles.personalExpensesValue}>₹{personalExpensesSummary.totalExpenses.toFixed(0)}</Text>
+              <MaterialIcons name="chevron-right" size={scaledFontSize.lg} color={colors.primaryText} />
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* Groups List */}
         {groupsLoading ? (
@@ -813,5 +856,54 @@ const createStyles = (
       fontSize: fonts.body,
       fontWeight: '600',
       marginHorizontal: scale(8),
+    },
+    personalExpensesCard: {
+      backgroundColor: colors.cardBackground,
+      marginHorizontal: scale(16),
+      marginVertical: scale(8),
+      padding: scale(16),
+      borderRadius: scale(12),
+      borderWidth: 1,
+      borderColor: colors.primaryButton + '20',
+    },
+    personalExpensesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    personalExpensesIcon: {
+      width: scale(40),
+      height: scale(40),
+      borderRadius: scale(20),
+      backgroundColor: colors.primaryButton,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: scale(12),
+    },
+    personalExpensesInfo: {
+      flex: 1,
+    },
+    personalExpensesTitle: {
+      ...typography.text.title,
+      color: colors.primaryText,
+      fontSize: fonts.title,
+      fontWeight: '600',
+    },
+    personalExpensesSubtitle: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      marginTop: scale(2),
+    },
+    personalExpensesAmount: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: scale(4),
+    },
+    personalExpensesValue: {
+      ...typography.text.subtitle,
+      color: colors.primaryText,
+      fontSize: fonts.subtitle,
+      fontWeight: '700',
     },
   });

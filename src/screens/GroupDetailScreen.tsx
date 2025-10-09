@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback} from 'react'; // Added useCallback
+import React, { useEffect, useState, useCallback } from 'react'; // Added useCallback
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -23,7 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { ensureDataUri } from '../utils/imageUtils';
 // --- RESPONSIVE ---
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { typography } from '../utils/typography'; // Assuming this path is correct
 import { ExpensesSkeleton, BalancesSkeleton, SettlementSkeleton } from '../components/SkeletonLoader';
 
@@ -63,7 +63,7 @@ interface Props {
       group: Group;
       expenses?: Expense[];
       members?: Member[];
-      balances?: Record<string, {net: number}>;
+      balances?: Record<string, { net: number }>;
       currentUserId?: string | null;
       reload?: boolean;
     };
@@ -71,18 +71,23 @@ interface Props {
   navigation: any;
 }
 
-export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
+export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const {group} = route.params;
+  const { group } = route.params;
   const currentUserId = user?.id || route.params?.currentUserId || null;
 
   // --- RESPONSIVE ---
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets(); // For modal padding
   const baseWidth = 375;
-  const scale = (size: number) => (screenWidth / baseWidth) * size;
+  const scale = (size: number) => {
+    const newSize = (screenWidth / baseWidth) * size;
 
+    // If the calculation results in NaN, return 0 as a safe fallback.
+    // Otherwise, return the calculated size.
+    return isNaN(newSize) ? 0 : newSize;
+  }
   // Create scaled font sizes
   const scaledFontSize = {
     xs: scale(typography.fontSize.xs),
@@ -111,7 +116,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
     },
     {
       id: 'balances',
-      label: 'Balances', 
+      label: 'Balances',
       icon: 'wallet-outline',
       activeIcon: 'wallet',
     },
@@ -131,7 +136,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   const [currentGroup, setCurrentGroup] = useState(group); // Track current group data locally
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [groupMembers, setGroupMembers] = useState<Member[]>([]);
-  const [balances, setBalances] = useState<Record<string, {net: number}>>({});
+  const [balances, setBalances] = useState<Record<string, { net: number }>>({});
   const [settlements, setSettlements] = useState<any[]>([]);
   const [firebaseSettlements, setFirebaseSettlements] = useState<Settlement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -140,7 +145,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   const [isGroupAdmin, setIsGroupAdmin] = useState(false);
   const [settlementLoading, setSettlementLoading] = useState(false);
 
-  
+
   // --- LOGIC (Wrapped in useCallback) ---
 
   const loadGroupData = useCallback(async () => {
@@ -149,11 +154,11 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       return;
     }
     setLoading(true);
-    
+
     try {
       // Import Firebase service dynamically
       const { firebaseService } = await import('../services/firebaseService');
-      
+
       // Load real group data
       const [updatedGroup, groupExpenses] = await Promise.all([
         firebaseService.getGroupById(groupId),
@@ -161,20 +166,20 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       ]);
 
       if (updatedGroup) {
-        
+
         // Update the main group object with fresh data (including cover image)
         const updatedGroupData = {
           ...currentGroup,
           ...updatedGroup,
           coverImageBase64: updatedGroup.coverImageBase64
         };
-        
+
         // Update the local group state to reflect fresh data
         setCurrentGroup(updatedGroupData);
-        
+
         // Update the group object in parent navigation params for consistency
         navigation.setParams({ group: updatedGroupData });
-        
+
         const members = updatedGroup.members.map(member => ({
           userId: member.userId,
           name: member.name,
@@ -184,10 +189,10 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
           isCreator: updatedGroup.createdBy === member.userId,
           role: member.role
         }));
-        
+
         setGroupMembers(members);
         setIsGroupAdmin(
-          updatedGroup.createdBy === currentUserId || 
+          updatedGroup.createdBy === currentUserId ||
           members.some(m => m.userId === currentUserId && m.isAdmin)
         );
       }
@@ -197,7 +202,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         // Map participants with proper member data
         const enrichedParticipants = expense.participants.map(participant => {
           const member = updatedGroup?.members.find(m => m.userId === participant.id);
-          
+
           return {
             ...participant,
             userId: participant.id, // Ensure userId field exists
@@ -226,7 +231,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
           receiptUrl: ensureDataUri(expense.receiptBase64),
         };
       });
-      
+
       setExpenses(transformedExpenses);
 
       // Load Firebase settlements first
@@ -240,8 +245,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       // Calculate balances dynamically, excluding paid settlements
       const paidSettlements = loadedFirebaseSettlements.filter(s => s.status === 'paid');
       const calculatedBalances = calculateBalancesFromExpenses(
-        groupExpenses, 
-        updatedGroup?.members || [], 
+        groupExpenses,
+        updatedGroup?.members || [],
         paidSettlements
       );
       setBalances(calculatedBalances);
@@ -249,7 +254,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       // Calculate settlements from remaining balances
       const calculatedSettlements = calculateOptimalSettlements(calculatedBalances, updatedGroup?.members || []);
       setSettlements(calculatedSettlements);
-      
+
     } catch (err) {
       Alert.alert('Error', 'Failed to load group data');
     } finally {
@@ -277,11 +282,11 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
   // Handlers for group options
   const handleAddMember = useCallback(() => {
-    navigation.navigate('AddMember', {group: currentGroup});
+    navigation.navigate('AddMember', { group: currentGroup });
   }, [navigation, currentGroup]);
 
   const handleManageGroup = useCallback(() => {
-    navigation.navigate('ManageGroup', {group: currentGroup});
+    navigation.navigate('ManageGroup', { group: currentGroup });
   }, [navigation, currentGroup]);
 
   const handleCompleteGroup = useCallback(async () => {
@@ -289,10 +294,10 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       // Check if there are any pending settlements
       const allSettlements = calculateOptimalSettlements(balances, groupMembers);
       const pendingSettlements = allSettlements.length > 0;
-      
+
       // Also check firebase settlements for pending status
       const firebasePendingSettlements = firebaseSettlements.filter(s => s.status === 'pending' || s.status === 'unpaid');
-      
+
       if (pendingSettlements || firebasePendingSettlements.length > 0) {
         Alert.alert(
           'Cannot Complete Group',
@@ -301,7 +306,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         );
         return;
       }
-      
+
       Alert.alert(
         'Complete Group',
         'Are you sure you want to complete this group? Once completed, no new expenses can be added, but you can still view the history.',
@@ -352,7 +357,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
             try {
               setSettlementLoading(true);
               const { firebaseService } = await import('../services/firebaseService');
-              
+
               const timestamp = new Date().toISOString();
               await firebaseService.createSettlement({
                 groupId: currentGroup.id,
@@ -366,11 +371,11 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                 updatedAt: timestamp,
                 paidAt: timestamp,
               });
-              
+
               // Reload settlements
               const updatedSettlements = await firebaseService.getGroupSettlements(currentGroup.id);
               setFirebaseSettlements(updatedSettlements);
-              
+
               Alert.alert('Success', 'Payment marked as pending. Waiting for confirmation from receiver.');
             } catch (error) {
               Alert.alert('Error', 'Failed to mark payment. Please try again.');
@@ -396,17 +401,17 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
               Alert.alert('Error', 'Settlement ID not found');
               return;
             }
-            
+
             try {
               setSettlementLoading(true);
               const { firebaseService } = await import('../services/firebaseService');
-              
+
               await firebaseService.confirmSettlement(currentGroup.id, settlement.id);
-              
+
               // Reload settlements
               const updatedSettlements = await firebaseService.getGroupSettlements(currentGroup.id);
               setFirebaseSettlements(updatedSettlements);
-              
+
               Alert.alert('Success', 'Payment confirmed!');
             } catch (error) {
               Alert.alert('Error', 'Failed to confirm payment. Please try again.');
@@ -422,20 +427,20 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   const handleLeaveGroup = useCallback(async () => {
     try {
       // Check if the current user has any pending settlements
-      const userPendingSettlements = settlements.filter(settlement => 
+      const userPendingSettlements = settlements.filter(settlement =>
         settlement.fromUserId === currentUserId || settlement.toUserId === currentUserId
       );
-      
+
       // Also check Firebase settlements for pending status involving the current user
-      const userFirebasePendingSettlements = firebaseSettlements.filter(settlement => 
+      const userFirebasePendingSettlements = firebaseSettlements.filter(settlement =>
         (settlement.fromUserId === currentUserId || settlement.toUserId === currentUserId) &&
         (settlement.status === 'pending' || settlement.status === 'unpaid')
       );
-      
+
       // Check if user has any outstanding balance
       const userBalance = balances[currentUserId || ''];
       const hasOutstandingBalance = userBalance && Math.abs(userBalance.net) > 0.01;
-      
+
       if (userPendingSettlements.length > 0 || userFirebasePendingSettlements.length > 0 || hasOutstandingBalance) {
         Alert.alert(
           'Cannot Leave Group',
@@ -444,7 +449,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         );
         return;
       }
-      
+
       // If no pending settlements, show confirmation dialog
       Alert.alert(
         'Leave Group',
@@ -485,8 +490,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
   // Helper function to calculate balances from expenses
   const calculateBalancesFromExpenses = useCallback((expenses: any[], members: any[], paidSettlements: Settlement[] = []) => {
-    const balances: Record<string, {net: number}> = {};
-    
+    const balances: Record<string, { net: number }> = {};
+
     // Initialize balances for all members
     members.forEach(member => {
       balances[member.userId] = { net: 0 };
@@ -495,7 +500,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
     // Process each expense
     expenses.forEach(expense => {
       const payerId = expense.paidBy.id;
-      
+
       expense.participants.forEach((participant: any) => {
         const participantId = participant.id || participant.userId;
         if (participantId !== payerId) {
@@ -516,7 +521,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         const fromUserId = settlement.fromUserId;
         const toUserId = settlement.toUserId;
         const amount = settlement.amount;
-        
+
         // Reduce debt for payer and credit for receiver
         if (balances[fromUserId]) {
           balances[fromUserId].net += amount; // Reduce debt (move towards positive)
@@ -531,18 +536,18 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   }, []);
 
   // Helper function to calculate optimal settlements
-  const calculateOptimalSettlements = useCallback((balances: Record<string, {net: number}>, members: any[]) => {
+  const calculateOptimalSettlements = useCallback((balances: Record<string, { net: number }>, members: any[]) => {
     const settlements: any[] = [];
-    
+
     // Create arrays of creditors and debtors
     const creditors = Object.entries(balances)
       .filter(([, balance]) => balance.net > 0)
       .map(([userId, balance]) => {
         const member = members.find(m => m.userId === userId);
-        return { 
-          userId, 
+        return {
+          userId,
           name: member?.name || 'Unknown',
-          amount: balance.net 
+          amount: balance.net
         };
       })
       .sort((a, b) => b.amount - a.amount);
@@ -551,23 +556,23 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       .filter(([, balance]) => balance.net < 0)
       .map(([userId, balance]) => {
         const member = members.find(m => m.userId === userId);
-        return { 
-          userId, 
+        return {
+          userId,
           name: member?.name || 'Unknown',
-          amount: Math.abs(balance.net) 
+          amount: Math.abs(balance.net)
         };
       })
       .sort((a, b) => b.amount - a.amount);
 
     // Greedy algorithm to minimize transactions
     let i = 0, j = 0;
-    
+
     while (i < creditors.length && j < debtors.length) {
       const creditor = creditors[i];
       const debtor = debtors[j];
-      
+
       const settleAmount = Math.min(creditor.amount, debtor.amount);
-      
+
       if (settleAmount > 0.01) {
         settlements.push({
           id: `${debtor.userId}-${creditor.userId}`,
@@ -578,29 +583,29 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
           amount: settleAmount
         });
       }
-      
+
       creditor.amount -= settleAmount;
       debtor.amount -= settleAmount;
-      
+
       if (creditor.amount < 0.01) i++;
       if (debtor.amount < 0.01) j++;
     }
-    
+
     return settlements;
   }, [currentUserId]);
 
-  const categoryMapping: Record<number | string, {emoji: string; color: string}> = {
-    1: {emoji: '🍽️', color: '#FEF3C7'},
-    2: {emoji: '🚗', color: '#FECACA'},
-    3: {emoji: '🛍️', color: '#E0E7FF'},
-    default: {emoji: '💰', color: '#F3F4F6'},
+  const categoryMapping: Record<number | string, { emoji: string; color: string }> = {
+    1: { emoji: '🍽️', color: '#FEF3C7' },
+    2: { emoji: '🚗', color: '#FECACA' },
+    3: { emoji: '🛍️', color: '#E0E7FF' },
+    default: { emoji: '💰', color: '#F3F4F6' },
   };
 
   const toggleUserExpansion = useCallback((userId: string) => {
     // --- UI IMPROVEMENT ---
     // Animate the expansion
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedUsers(prev => ({...prev, [userId]: !prev[userId]}));
+    setExpandedUsers(prev => ({ ...prev, [userId]: !prev[userId] }));
   }, []); // setExpandedUsers is stable
 
   const getBalanceBreakdown = useCallback((targetUserId: string) => {
@@ -619,11 +624,9 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         if (settleAmount > 0) {
           breakdown.push({
             type: 'owes',
-            text: `${target.name}${
-              targetUserId === currentUserId ? ' (You)' : ''
-            } owes ₹${settleAmount.toFixed(0)} to ${member.name}${
-              userId === currentUserId ? ' (You)' : ''
-            }`,
+            text: `${target.name}${targetUserId === currentUserId ? ' (You)' : ''
+              } owes ₹${settleAmount.toFixed(0)} to ${member.name}${userId === currentUserId ? ' (You)' : ''
+              }`,
             amount: settleAmount,
             avatar: member.avatar,
           });
@@ -633,11 +636,9 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         if (settleAmount > 0) {
           breakdown.push({
             type: 'owed',
-            text: `${member.name}${
-              userId === currentUserId ? ' (You)' : ''
-            } owes ₹${settleAmount.toFixed(0)} to ${target.name}${
-              targetUserId === currentUserId ? ' (You)' : ''
-            }`,
+            text: `${member.name}${userId === currentUserId ? ' (You)' : ''
+              } owes ₹${settleAmount.toFixed(0)} to ${target.name}${targetUserId === currentUserId ? ' (You)' : ''
+              }`,
             amount: settleAmount,
             avatar: member.avatar,
           });
@@ -655,10 +656,10 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
     }
 
     const isPaidByUser = expense.paidBy === currentUserId;
-    const userParticipant = expense.participants?.find((p: any) => 
+    const userParticipant = expense.participants?.find((p: any) =>
       (p.userId === currentUserId || p.id === currentUserId)
     );
-    
+
     if (!userParticipant) {
       return { status: 'not_involved', label: '', color: colors.secondaryText };
     }
@@ -676,7 +677,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         // Others owe user money - check if they've settled
         // Check if there are any unpaid amounts owed to user
         const userBalance = balances[currentUserId]?.net || 0;
-        
+
         if (userBalance > 0) {
           // Still owed money
           return { status: 'to_receive', label: 'To Receive', color: colors.primaryButton };
@@ -689,11 +690,11 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       // Someone else paid the expense - user owes money
       if (userShare > 0) {
         // Check if user has settled this with the payer
-        const settlementWithPayer = firebaseSettlements.find(settlement => 
-          settlement.fromUserId === currentUserId && 
+        const settlementWithPayer = firebaseSettlements.find(settlement =>
+          settlement.fromUserId === currentUserId &&
           settlement.toUserId === expense.paidBy
         );
-        
+
         if (!settlementWithPayer) {
           // No settlement record - unpaid
           return { status: 'unpaid', label: 'Unpaid', color: colors.error || '#EF4444' };
@@ -711,7 +712,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   }, [currentUserId, colors, firebaseSettlements, balances]);
 
   // --- RENDER FUNCTIONS ---
-  
+
   const renderExpenses = () => {
     if (loading) {
       return <ExpensesSkeleton />;
@@ -789,7 +790,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                     })
                   }>
                   <View
-                    style={[styles.expenseIcon, {backgroundColor: category.color}]}>
+                    style={[styles.expenseIcon, { backgroundColor: category.color }]}>
                     <Text style={styles.expenseIconText}>{category.emoji}</Text>
                   </View>
                   <View style={styles.expenseDetails}>
@@ -827,7 +828,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
       .map(([userId, balance]) => {
         const member = groupMembers.find(m => m.userId === userId);
         if (!member) return null;
-        return {userId, member, balance, isYou: userId === currentUserId};
+        return { userId, member, balance, isYou: userId === currentUserId };
       })
       .filter(Boolean) as any[];
 
@@ -861,8 +862,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                 {(() => {
                   const imageUri = ensureDataUri(item.member.avatar);
                   return imageUri ? (
-                    <Image 
-                      source={{uri: imageUri}} 
+                    <Image
+                      source={{ uri: imageUri }}
                       style={styles.balanceAvatar}
                       onError={() => {
                         // Process member avatar
@@ -889,7 +890,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                   <Text
                     style={[
                       styles.balanceAmount,
-                      {color: item.balance.net >= 0 ? '#10B981' : '#EF4444'},
+                      { color: item.balance.net >= 0 ? '#10B981' : '#EF4444' },
                     ]}>
                     ₹{totalAmount.toFixed(0)}
                   </Text>
@@ -911,8 +912,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                       {(() => {
                         const imageUri = ensureDataUri(b.avatar);
                         return imageUri ? (
-                          <Image 
-                            source={{uri: imageUri}} 
+                          <Image
+                            source={{ uri: imageUri }}
                             style={styles.breakdownAvatar}
                             onError={() => {
                               // Process breakdown avatar
@@ -939,7 +940,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   };
 
   const renderSettlement = () => {
-    
+
     if (loading || groupMembers.length === 0) {
       return <SettlementSkeleton />;
     }
@@ -958,7 +959,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
     // Separate active and completed settlements
     const activeSettlements = settlements; // These are calculated from current balances
     const completedSettlements = firebaseSettlements.filter(fs => fs.status === 'paid');
-    
+
     return (
       <>
         {/* Active Settlements - Need to be paid */}
@@ -967,23 +968,23 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         )}
         {activeSettlements.map((settlement) => {
           // Check if this settlement has a Firebase tracking record
-          const firebaseSettlement = firebaseSettlements.find(fs => 
-            fs.fromUserId === settlement.fromUserId && 
+          const firebaseSettlement = firebaseSettlements.find(fs =>
+            fs.fromUserId === settlement.fromUserId &&
             fs.toUserId === settlement.toUserId &&
             Math.abs(fs.amount - settlement.amount) < 0.01
           );
 
           const isCurrentUserPayer = settlement.fromUserId === currentUserId;
           const isCurrentUserReceiver = settlement.toUserId === currentUserId;
-          
-          
+
+
           return (
             <View key={settlement.id} style={styles.settlementItem}>
               <View style={styles.settlementInfo}>
-                <Ionicons 
-                  name="arrow-forward-circle" 
-                  size={scale(24)} 
-                  color={colors.primaryButton} 
+                <Ionicons
+                  name="arrow-forward-circle"
+                  size={scale(24)}
+                  color={colors.primaryButton}
                   style={styles.settlementIcon}
                 />
                 <View style={styles.settlementTextContainer}>
@@ -995,18 +996,18 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                   <Text style={styles.settlementStatus}>
                     Status: {
                       !firebaseSettlement ? 'Unpaid' :
-                      firebaseSettlement.status === 'pending' ? 'Pending Confirmation' : 'Paid'
+                        firebaseSettlement.status === 'pending' ? 'Pending Confirmation' : 'Paid'
                     }
                   </Text>
                 </View>
               </View>
-              
+
               <View style={styles.settlementActions}>
                 <Text style={styles.settlementAmount}>₹{settlement.amount.toFixed(0)}</Text>
-                
+
                 {/* Show appropriate button based on user role and status */}
                 {!firebaseSettlement && isCurrentUserPayer && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.settleButton}
                     onPress={() => handleSettlePayment(settlement)}
                     disabled={settlementLoading}
@@ -1016,15 +1017,15 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                     </Text>
                   </TouchableOpacity>
                 )}
-                
+
                 {firebaseSettlement?.status === 'pending' && isCurrentUserPayer && (
                   <View style={styles.pendingButton}>
                     <Text style={styles.pendingButtonText}>Pending</Text>
                   </View>
                 )}
-                
+
                 {firebaseSettlement?.status === 'pending' && isCurrentUserReceiver && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.confirmButton}
                     onPress={() => handleConfirmPayment(firebaseSettlement)}
                     disabled={settlementLoading}
@@ -1034,21 +1035,21 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                     </Text>
                   </TouchableOpacity>
                 )}
-                
+
                 {firebaseSettlement?.status === 'paid' && (
                   <View style={styles.paidButton}>
                     <Ionicons name="checkmark-circle" size={scale(16)} color={colors.success} />
                     <Text style={styles.paidButtonText}>Paid</Text>
                   </View>
                 )}
-                
+
                 {/* Show unpaid status for non-current users */}
                 {!isCurrentUserPayer && !isCurrentUserReceiver && !firebaseSettlement && (
                   <View style={styles.unpaidButton}>
                     <Text style={styles.unpaidButtonText}>Unpaid</Text>
                   </View>
                 )}
-                
+
                 {/* Fallback for edge cases */}
                 {!isCurrentUserPayer && !isCurrentUserReceiver && firebaseSettlement && (
                   <Text style={styles.noActionText}>-</Text>
@@ -1057,7 +1058,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
             </View>
           );
         })}
-        
+
         {/* Completed Settlements - Already paid */}
         {completedSettlements.length > 0 && (
           <>
@@ -1065,10 +1066,10 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
             {completedSettlements.map((settlement) => (
               <View key={`completed-${settlement.id}`} style={[styles.settlementItem, styles.completedSettlementItem]}>
                 <View style={styles.settlementInfo}>
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={scale(24)} 
-                    color={colors.success} 
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={scale(24)}
+                    color={colors.success}
                     style={styles.settlementIcon}
                   />
                   <View style={styles.settlementTextContainer}>
@@ -1082,7 +1083,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                     </Text>
                   </View>
                 </View>
-                
+
                 <View style={styles.settlementActions}>
                   <Text style={styles.settlementAmount}>₹{settlement.amount.toFixed(0)}</Text>
                   <View style={styles.paidButton}>
@@ -1112,7 +1113,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
   };
 
   const handleTabPress = useCallback((tabId: TabId) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // Animation line is removed. The crash is fixed.
     setActiveTab(tabId);
   }, []);
 
@@ -1149,7 +1150,7 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
             {(() => {
               const imageUri = ensureDataUri(currentGroup?.coverImageBase64);
               return imageUri ? (
-                <Image source={{uri: imageUri}} style={styles.groupCoverImage} />
+                <Image source={{ uri: imageUri }} style={styles.groupCoverImage} />
               ) : (
                 <View style={styles.groupAvatarContainer}>
                   <Text style={styles.groupAvatar}>{currentGroup?.avatar || '🎭'}</Text>
@@ -1159,12 +1160,12 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
             <View style={styles.membersPreview}>
               {groupMembers.slice(0, 3).map((member, index) => (
-                <View key={member.id || index} style={[styles.memberAvatarContainer, {marginLeft: scale(index * -8)}]}>
+                <View key={member.id || index} style={[styles.memberAvatarContainer, { marginLeft: scale(index * -8) }]}>
                   {(() => {
                     const imageUri = ensureDataUri(member.avatar);
                     return imageUri ? (
-                      <Image 
-                        source={{uri: imageUri}} 
+                      <Image
+                        source={{ uri: imageUri }}
                         style={styles.memberAvatar}
                         onError={() => {
                           // Process member avatar
@@ -1231,15 +1232,15 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
         <View style={styles.tabContainer}>
           {TAB_CONFIG.map(tab => (
-            <TouchableOpacity 
-              key={tab.id} 
-              style={[styles.tab, activeTab === tab.id && styles.activeTab]} 
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.tab, activeTab === tab.id && styles.activeTab]}
               onPress={() => handleTabPress(tab.id)}
             >
               <View style={styles.tabContent}>
-                <Ionicons 
-                  name={activeTab === tab.id ? tab.activeIcon as any : tab.icon as any} 
-                  size={scale(16)} 
+                <Ionicons
+                  name={activeTab === tab.id ? tab.activeIcon as any : tab.icon as any}
+                  size={scale(16)}
                   color={activeTab === tab.id ? colors.primaryButton : colors.secondaryText}
                   style={styles.tabIcon}
                 />
@@ -1254,25 +1255,25 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         <View style={styles.tabContentContainer}>{renderTabContent()}</View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('AddExpense', {group: currentGroup, onReturn: loadGroupData})}>
+      <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('AddExpense', { group: currentGroup, onReturn: loadGroupData })}>
         <Ionicons name="add" size={scale(28)} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* --- UI IMPROVEMENT: MODAL ---
        Changed to a slide-up Bottom Sheet
       --- */}
-      <Modal 
-        visible={showGroupOptions} 
-        transparent 
-        animationType="slide" 
+      <Modal
+        visible={showGroupOptions}
+        transparent
+        animationType="slide"
         onRequestClose={() => setShowGroupOptions(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPressOut={() => setShowGroupOptions(false)} // Use onPressOut to close
         >
-          <View 
+          <View
             style={styles.optionsMenu}
             onStartShouldSetResponder={() => true} // Prevents taps from closing modal
           >
@@ -1305,8 +1306,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
             {/* Cancel Button */}
             <View style={styles.cancelButtonContainer}>
-              <TouchableOpacity 
-                style={[styles.optionItem, styles.cancelButton]} 
+              <TouchableOpacity
+                style={[styles.optionItem, styles.cancelButton]}
                 onPress={() => setShowGroupOptions(false)}
               >
                 <Text style={[styles.optionText, styles.cancelText]}>Cancel</Text>
@@ -1323,20 +1324,20 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 // --- HELPER FUNCTION ---
 // (Moved outside component for stability)
 function calculateSettlementsPlaceholder(
-  balances: Record<string, {net: number}>,
+  balances: Record<string, { net: number }>,
   members: Member[],
   currentUserId: string | null,
 ) {
   const arr: any[] = [];
   const entries = Object.entries(balances || {});
-  
+
   // Create mutable copies for calculation
   const debtors = entries
     .filter(([, b]) => b.net < 0)
-    .map(([id, b]) => ({id, net: b.net}));
+    .map(([id, b]) => ({ id, net: b.net }));
   const creditors = entries
     .filter(([, b]) => b.net > 0)
-    .map(([id, b]) => ({id, net: b.net}));
+    .map(([id, b]) => ({ id, net: b.net }));
 
   debtors.forEach(d => {
     let remaining = Math.abs(d.net);
@@ -1344,8 +1345,8 @@ function calculateSettlementsPlaceholder(
       if (remaining <= 0) break;
       const amt = Math.min(remaining, c.net);
       if (amt > 0) {
-        const fromMember = members.find(m => m.userId === d.id) || {name: 'Unknown'};
-        const toMember = members.find(m => m.userId === c.id) || {name: 'Unknown'};
+        const fromMember = members.find(m => m.userId === d.id) || { name: 'Unknown' };
+        const toMember = members.find(m => m.userId === c.id) || { name: 'Unknown' };
         arr.push({
           id: `${d.id}-${c.id}`,
           fromUserId: d.id,
@@ -1371,7 +1372,7 @@ const createStyles = (
   insets: { top: number, bottom: number, left: number, right: number }
 ) =>
   StyleSheet.create({
-    container: {flex: 1, backgroundColor: colors.background},
+    container: { flex: 1, backgroundColor: colors.background },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1387,11 +1388,11 @@ const createStyles = (
       fontWeight: '600',
       color: colors.primaryText,
     },
-    backButton: {padding: scale(8)},
-    settingsButton: {padding: scale(8)},
-    groupInfo: {alignItems: 'center', paddingVertical: scale(20)},
-    groupImageContainer: {position: 'relative', marginBottom: scale(12)},
-    groupCoverImage: {width: scale(80), height: scale(80), borderRadius: scale(40)},
+    backButton: { padding: scale(8) },
+    settingsButton: { padding: scale(8) },
+    groupInfo: { alignItems: 'center', paddingVertical: scale(20) },
+    groupImageContainer: { position: 'relative', marginBottom: scale(12) },
+    groupCoverImage: { width: scale(80), height: scale(80), borderRadius: scale(40) },
     groupAvatarContainer: {
       width: scale(80),
       height: scale(80),
@@ -1400,8 +1401,8 @@ const createStyles = (
       justifyContent: 'center',
       alignItems: 'center',
     },
-    groupAvatar: {fontSize: scale(40), textAlign: 'center'},
-    membersPreview: {flexDirection: 'row', position: 'absolute', bottom: scale(-10), right: scale(-10)},
+    groupAvatar: { fontSize: scale(40), textAlign: 'center' },
+    membersPreview: { flexDirection: 'row', position: 'absolute', bottom: scale(-10), right: scale(-10) },
     memberAvatarContainer: {
       width: scale(24),
       height: scale(24),
@@ -1411,7 +1412,7 @@ const createStyles = (
       backgroundColor: '#FFFFFF',
       overflow: 'hidden', // Add overflow hidden
     },
-    memberAvatar: {width: '100%', height: '100%'}, // Use 100%
+    memberAvatar: { width: '100%', height: '100%' }, // Use 100%
     memberAvatarPlaceholder: {
       width: '100%', // Use 100%
       height: '100%', // Use 100%
@@ -1419,8 +1420,8 @@ const createStyles = (
       justifyContent: 'center',
       alignItems: 'center',
     },
-    memberAvatarText: {fontSize: scale(10), fontWeight: 'bold', color: '#FFFFFF'},
-    groupName: {fontSize: fonts.xl, fontWeight: '600', color: colors.primaryText}, // Scaled
+    memberAvatarText: { fontSize: scale(10), fontWeight: 'bold', color: '#FFFFFF' },
+    groupName: { fontSize: fonts.xl, fontWeight: '600', color: colors.primaryText }, // Scaled
     summarySection: {
       paddingHorizontal: scale(16),
       paddingVertical: scale(16),
@@ -1429,10 +1430,10 @@ const createStyles = (
       borderRadius: scale(8),
       marginBottom: scale(20),
     },
-    summaryTitle: {fontSize: fonts.subtitle, fontWeight: '600', color: colors.primaryText, marginBottom: scale(8)},
-    summaryText: {fontSize: fonts.caption, color: colors.secondaryText, marginBottom: scale(4), lineHeight: fonts.caption * 1.5},
-    oweAmount: {color: colors.error ?? '#EF4444', fontWeight: '600'},
-    owedAmount: {color: colors.success ?? '#10B981', fontWeight: '600'},
+    summaryTitle: { fontSize: fonts.subtitle, fontWeight: '600', color: colors.primaryText, marginBottom: scale(8) },
+    summaryText: { fontSize: fonts.caption, color: colors.secondaryText, marginBottom: scale(4), lineHeight: fonts.caption * 1.5 },
+    oweAmount: { color: colors.error ?? '#EF4444', fontWeight: '600' },
+    owedAmount: { color: colors.success ?? '#10B981', fontWeight: '600' },
     tabContainer: {
       flexDirection: 'row',
       borderBottomWidth: 1,
@@ -1442,7 +1443,7 @@ const createStyles = (
       borderRadius: scale(8),
       marginBottom: scale(16),
     },
-    tab: {flex: 1, paddingVertical: scale(12), alignItems: 'center'},
+    tab: { flex: 1, paddingVertical: scale(12), alignItems: 'center' },
     activeTab: {
       backgroundColor: colors.primaryButton + '20',
       borderRadius: scale(6),
@@ -1454,10 +1455,10 @@ const createStyles = (
     tabIcon: {
       marginBottom: scale(4),
     },
-    tabText: {fontSize: fonts.caption, color: colors.secondaryText},
-    activeTabText: {color: colors.primaryButton, fontWeight: '600'},
-    scrollContainer: {flex: 1},
-    tabContentContainer: {paddingHorizontal: scale(16), paddingBottom: scale(100)},
+    tabText: { fontSize: fonts.caption, color: colors.secondaryText },
+    activeTabText: { color: colors.primaryButton, fontWeight: '600' },
+    scrollContainer: { flex: 1 },
+    tabContentContainer: { paddingHorizontal: scale(16), paddingBottom: scale(100) },
     expenseItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1473,15 +1474,15 @@ const createStyles = (
       alignItems: 'center',
       marginRight: scale(12),
     },
-    expenseIconText: {fontSize: scale(18)},
-    expenseDetails: {flex: 1, marginRight: scale(8)},
+    expenseIconText: { fontSize: scale(18) },
+    expenseDetails: { flex: 1, marginRight: scale(8) },
     expenseTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: scale(2),
     },
-    expenseTitle: {fontSize: fonts.body, fontWeight: '500', color: colors.primaryText, flex: 1},
+    expenseTitle: { fontSize: fonts.body, fontWeight: '500', color: colors.primaryText, flex: 1 },
     statusTag: {
       paddingHorizontal: scale(8),
       paddingVertical: scale(2),
@@ -1494,8 +1495,8 @@ const createStyles = (
       fontWeight: '600',
       textAlign: 'center',
     },
-    expenseSubtitle: {fontSize: fonts.xs, color: colors.secondaryText, marginTop: scale(2)},
-    expenseDate: {fontSize: fonts.xs, color: colors.secondaryText, marginTop: scale(2)},
+    expenseSubtitle: { fontSize: fonts.xs, color: colors.secondaryText, marginTop: scale(2) },
+    expenseDate: { fontSize: fonts.xs, color: colors.secondaryText, marginTop: scale(2) },
     dateHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1515,20 +1516,20 @@ const createStyles = (
       height: 1,
       backgroundColor: colors.background,
     },
-    expenseAmounts: {alignItems: 'flex-end'},
-    expenseAmount: {fontSize: fonts.body, fontWeight: '600', color: colors.primaryText},
-    expenseShare: {fontSize: fonts.caption, color: colors.primaryButton, marginTop: scale(2)},
-    balanceSection: {marginVertical: scale(8), backgroundColor: colors.cardBackground, borderRadius: scale(8)},
+    expenseAmounts: { alignItems: 'flex-end' },
+    expenseAmount: { fontSize: fonts.body, fontWeight: '600', color: colors.primaryText },
+    expenseShare: { fontSize: fonts.caption, color: colors.primaryButton, marginTop: scale(2) },
+    balanceSection: { marginVertical: scale(8), backgroundColor: colors.cardBackground, borderRadius: scale(8) },
     balanceHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: scale(16),
       paddingHorizontal: scale(16),
     },
-    balanceAvatar: {width: scale(40), height: scale(40), borderRadius: scale(20), marginRight: scale(12)},
-    balanceInfo: {flex: 1, marginLeft: scale(4)},
-    balanceName: {fontSize: fonts.body, color: colors.primaryText, fontWeight: '500'},
-    balanceAmount: {fontSize: fonts.xl, fontWeight: '700'},
+    balanceAvatar: { width: scale(40), height: scale(40), borderRadius: scale(20), marginRight: scale(12) },
+    balanceInfo: { flex: 1, marginLeft: scale(4) },
+    balanceName: { fontSize: fonts.body, color: colors.primaryText, fontWeight: '500' },
+    balanceAmount: { fontSize: fonts.xl, fontWeight: '700' },
     balanceAvatarPlaceholder: {
       width: scale(40),
       height: scale(40),
@@ -1538,12 +1539,12 @@ const createStyles = (
       alignItems: 'center',
       marginRight: scale(12),
     },
-    balanceAvatarText: {color: '#FFFFFF', fontSize: fonts.body, fontWeight: 'bold'},
-    balanceAmountContainer: {flexDirection: 'row', alignItems: 'center'},
-    expandIcon: {marginLeft: scale(8)},
-    breakdownContainer: {paddingLeft: scale(68), paddingRight: scale(16), paddingBottom: scale(16)}, // Aligned with name
-    breakdownItem: {flexDirection: 'row', alignItems: 'center', paddingVertical: scale(8)},
-    breakdownAvatar: {width: scale(32), height: scale(32), borderRadius: scale(16), marginRight: scale(12)},
+    balanceAvatarText: { color: '#FFFFFF', fontSize: fonts.body, fontWeight: 'bold' },
+    balanceAmountContainer: { flexDirection: 'row', alignItems: 'center' },
+    expandIcon: { marginLeft: scale(8) },
+    breakdownContainer: { paddingLeft: scale(68), paddingRight: scale(16), paddingBottom: scale(16) }, // Aligned with name
+    breakdownItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: scale(8) },
+    breakdownAvatar: { width: scale(32), height: scale(32), borderRadius: scale(16), marginRight: scale(12) },
     breakdownAvatarPlaceholder: {
       width: scale(32),
       height: scale(32),
@@ -1553,9 +1554,9 @@ const createStyles = (
       alignItems: 'center',
       marginRight: scale(12),
     },
-    breakdownAvatarText: {fontSize: fonts.caption, fontWeight: '600', color: colors.primaryText},
-    breakdownText: {fontSize: fonts.caption, color: colors.secondaryText, flex: 1},
-    
+    breakdownAvatarText: { fontSize: fonts.caption, fontWeight: '600', color: colors.primaryText },
+    breakdownText: { fontSize: fonts.caption, color: colors.secondaryText, flex: 1 },
+
     // Settlement styles
     settlementItem: {
       flexDirection: 'row',
@@ -1681,7 +1682,7 @@ const createStyles = (
       borderLeftWidth: scale(3),
       borderLeftColor: colors.success,
     },
-    
+
     floatingButton: {
       position: 'absolute',
       bottom: scale(20),
@@ -1694,7 +1695,7 @@ const createStyles = (
       alignItems: 'center',
       elevation: 8,
     },
-    
+
     // --- MODAL UI IMPROVEMENT ---
     modalOverlay: {
       flex: 1,
@@ -1708,7 +1709,7 @@ const createStyles = (
       paddingHorizontal: scale(16),
       paddingTop: scale(12), // Padding for the handle
       // Use safe area insets for bottom padding
-      paddingBottom: insets.bottom === 0 ? scale(16) : insets.bottom, 
+      paddingBottom: insets.bottom === 0 ? scale(16) : insets.bottom,
     },
     modalHandle: {
       width: scale(40),
@@ -1723,11 +1724,11 @@ const createStyles = (
       alignItems: 'center',
       paddingVertical: scale(16),
     },
-    optionIconStyle: {marginRight: scale(16)},
-    optionText: {fontSize: fonts.body, color: colors.primaryText},
-    leaveText: {color: colors.error ?? '#EF4444'},
-    deleteText: {color: colors.error ?? '#EF4444', fontWeight: '600'},
-    completeText: {color: colors.success ?? '#10B981', fontWeight: '600'},
+    optionIconStyle: { marginRight: scale(16) },
+    optionText: { fontSize: fonts.body, color: colors.primaryText },
+    leaveText: { color: colors.error ?? '#EF4444' },
+    deleteText: { color: colors.error ?? '#EF4444', fontWeight: '600' },
+    completeText: { color: colors.success ?? '#10B981', fontWeight: '600' },
     cancelButtonContainer: {
       borderTopWidth: 1,
       borderTopColor: colors.background,
@@ -1746,9 +1747,9 @@ const createStyles = (
     },
     // --- END MODAL UI IMPROVEMENT ---
 
-    loadingContainer: {alignItems: 'center', paddingVertical: scale(32)},
-    loadingText: {fontSize: fonts.body, color: colors.secondaryText, marginTop: scale(16)},
-    noDataContainer: {alignItems: 'center', paddingVertical: scale(40)},
-    noDataText: {fontSize: fonts.header, fontWeight: '600', color: colors.secondaryText, marginTop: scale(16)},
-    noDataSubtext: {fontSize: fonts.caption, color: colors.secondaryText, marginTop: scale(8)},
+    loadingContainer: { alignItems: 'center', paddingVertical: scale(32) },
+    loadingText: { fontSize: fonts.body, color: colors.secondaryText, marginTop: scale(16) },
+    noDataContainer: { alignItems: 'center', paddingVertical: scale(40) },
+    noDataText: { fontSize: fonts.header, fontWeight: '600', color: colors.secondaryText, marginTop: scale(16) },
+    noDataSubtext: { fontSize: fonts.caption, color: colors.secondaryText, marginTop: scale(8) },
   });

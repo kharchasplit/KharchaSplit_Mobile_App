@@ -1,4 +1,5 @@
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export interface UserProfile {
   id: string;
@@ -151,6 +152,25 @@ export interface Settlement {
   paymentNote?: string;
 }
 
+export interface PersonalExpense {
+  id?: string;
+  userId: string;
+  description: string;
+  amount: number;
+  category: {
+    id: number;
+    name: string;
+    emoji: string;
+    color: string;
+  };
+  receiptBase64?: string;
+  date: string; // Date of the expense (ISO string format)
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  notes?: string;
+}
+
 export interface Activity {
   id?: string;
   userId: string;
@@ -174,6 +194,7 @@ class FirebaseService {
   private _referralsCollection = firestore().collection('referrals');
   private _groupsCollection = firestore().collection('groups');
   private _activitiesCollection = firestore().collection('activities');
+  private _personalExpensesCollection = firestore().collection('personalExpenses');
 
   // Expose usersCollection for direct queries when needed
   get usersCollection() {
@@ -272,7 +293,7 @@ class FirebaseService {
 
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
-      
+
       return {
         id: userDoc.id,
         ...userData,
@@ -288,7 +309,7 @@ class FirebaseService {
       const updateTimestamp = new Date().toISOString();
       // Filter out undefined values before updating
       const cleanUpdateData = this.cleanObject(updateData);
-      
+
       await this._usersCollection.doc(userId).update({
         ...cleanUpdateData,
         updatedAt: updateTimestamp,
@@ -314,7 +335,7 @@ class FirebaseService {
         isActive: false,
         updatedAt: new Date().toISOString(),
       });
-      
+
     } catch (error) {
       console.error('Error deactivating user:', error);
       throw new Error('Failed to deactivate user');
@@ -348,7 +369,7 @@ class FirebaseService {
       // 2. Handle groups if user is a member
       if (options.removeFromGroups || options.deactivateGroups) {
         const userGroups = await this.getUserGroups(userId);
-        
+
         for (const group of userGroups) {
           try {
             if (group.createdBy === userId && options.deactivateGroups) {
@@ -413,7 +434,7 @@ class FirebaseService {
   async getUserById(userId: string): Promise<UserProfile | null> {
     try {
       const userDoc = await this._usersCollection.doc(userId).get();
-      
+
       if (!userDoc.exists) {
         return null;
       }
@@ -449,7 +470,7 @@ class FirebaseService {
    */
   async getExistingPhoneNumbers(phoneNumbers: string[]): Promise<string[]> {
     try {
-      
+
       if (phoneNumbers.length === 0) {
         return [];
       }
@@ -457,10 +478,10 @@ class FirebaseService {
       // Firebase 'in' query can handle up to 10 items at a time
       const existingNumbers: string[] = [];
       const batchSize = 10;
-      
+
       for (let i = 0; i < phoneNumbers.length; i += batchSize) {
         const batch = phoneNumbers.slice(i, i + batchSize);
-        
+
         try {
           const querySnapshot = await this._usersCollection
             .where('phoneNumber', 'in', batch)
@@ -757,7 +778,7 @@ class FirebaseService {
 
       // Resolve members by phone numbers
       const members: GroupMember[] = [];
-      
+
       // Add creator as admin
       members.push({
         userId: createdBy,
@@ -803,13 +824,13 @@ class FirebaseService {
       };
 
       const docRef = await this._groupsCollection.add(groupDoc);
-      
+
       const group: Group = {
         id: docRef.id,
         ...groupDoc,
       };
 
-      
+
       // Create activity log for group creation
       try {
         await this.createActivity({
@@ -821,7 +842,7 @@ class FirebaseService {
           groupId: group.id,
           groupName: groupData.name,
         });
-        
+
         // Create join activities for other members
         for (const member of members) {
           if (member.userId !== createdBy) {
@@ -842,7 +863,7 @@ class FirebaseService {
         console.error('Error creating group activities:', activityError);
         // Don't fail the group creation if activity logging fails
       }
-      
+
       return group;
     } catch (error: any) {
       console.error('Error creating group:', error);
@@ -858,7 +879,7 @@ class FirebaseService {
    */
   async getUserGroups(userId: string): Promise<Group[]> {
     try {
-      
+
       // Try the simple query first
       let snapshot;
       try {
@@ -876,7 +897,7 @@ class FirebaseService {
         // Check if group is active and user is a member
         const isActive = groupData.isActive !== false; // Default to true if undefined
         const isMember = groupData.members && groupData.members.some((member: GroupMember) => member.userId === userId);
-        
+
         if (isActive && isMember) {
           groups.push({
             id: doc.id,
@@ -906,7 +927,7 @@ class FirebaseService {
                 return member; // Return original member if enrichment fails
               })
             );
-            
+
             return {
               ...group,
               members: enrichedMembers,
@@ -928,14 +949,14 @@ class FirebaseService {
       return enrichedGroups.filter(group => !group.isCompleted); // Only return active groups
     } catch (error: any) {
       console.error('Error getting user groups:', error);
-      
+
       // Provide more specific error information
       if (error.code === 'firestore/permission-denied') {
         throw new Error('Permission denied: Please check Firebase security rules');
       } else if (error.code === 'firestore/failed-precondition') {
         throw new Error('Database index required. Please contact support.');
       }
-      
+
       throw new Error('Failed to get user groups');
     }
   }
@@ -945,7 +966,7 @@ class FirebaseService {
    */
   async getCompletedGroups(userId: string): Promise<Group[]> {
     try {
-      
+
       // Try the simple query first
       let snapshot;
       try {
@@ -964,7 +985,7 @@ class FirebaseService {
         const isActive = groupData.isActive !== false; // Default to true if undefined
         const isCompleted = groupData.isCompleted === true;
         const isMember = groupData.members && groupData.members.some((member: GroupMember) => member.userId === userId);
-        
+
         if (isActive && isCompleted && isMember) {
           groups.push({
             id: doc.id,
@@ -994,7 +1015,7 @@ class FirebaseService {
                 return member; // Return original member if enrichment fails
               })
             );
-            
+
             return {
               ...group,
               members: enrichedMembers,
@@ -1016,14 +1037,14 @@ class FirebaseService {
       return enrichedGroups;
     } catch (error: any) {
       console.error('Error getting completed groups:', error);
-      
+
       // Provide more specific error information
       if (error.code === 'firestore/permission-denied') {
         throw new Error('Permission denied: Please check Firebase security rules');
       } else if (error.code === 'firestore/failed-precondition') {
         throw new Error('Database index required. Please contact support.');
       }
-      
+
       throw new Error('Failed to get completed groups');
     }
   }
@@ -1034,7 +1055,7 @@ class FirebaseService {
   async getGroupById(groupId: string): Promise<Group | null> {
     try {
       const groupDoc = await this._groupsCollection.doc(groupId).get();
-      
+
       if (!groupDoc.exists) {
         return null;
       }
@@ -1068,7 +1089,7 @@ class FirebaseService {
             return member; // Return original member if enrichment fails
           })
         );
-        
+
         return {
           ...group,
           members: enrichedMembers,
@@ -1090,7 +1111,7 @@ class FirebaseService {
       const updateTimestamp = new Date().toISOString();
       // Filter out undefined values before updating
       const cleanUpdateData = this.cleanObject(updateData);
-      
+
       await this._groupsCollection.doc(groupId).update({
         ...cleanUpdateData,
         updatedAt: updateTimestamp,
@@ -1116,7 +1137,7 @@ class FirebaseService {
   async completeGroup(groupId: string, completedBy?: string): Promise<Group> {
     try {
       const completedTimestamp = new Date().toISOString();
-      
+
       // Update group to completed status
       await this._groupsCollection.doc(groupId).update({
         isCompleted: true,
@@ -1146,28 +1167,15 @@ class FirebaseService {
     try {
       console.log(`[addGroupMember] Starting - GroupId: ${groupId}, Phone: ${phoneNumber}`);
 
-      const group = await this.getGroupById(groupId);
-      if (!group) {
-        console.error(`[addGroupMember] Group not found: ${groupId}`);
-        throw new Error('Group not found');
-      }
-      console.log(`[addGroupMember] Group found: ${group.name}, Members count: ${group.members.length}`);
-
+      // You still need to find the user to get their details
       const user = await this.getUserByPhone(phoneNumber);
       if (!user) {
         console.error(`[addGroupMember] User not found with phone: ${phoneNumber}`);
-        throw new Error(`User with phone ${phoneNumber} not found in database`);
+        throw new Error(`User with phone ${phoneNumber} not found`);
       }
       console.log(`[addGroupMember] User found: ${user.name} (ID: ${user.id})`);
 
-      // Check if user is already a member
-      const existingMember = group.members.find(member => member.userId === user.id);
-      if (existingMember) {
-        console.warn(`[addGroupMember] User already a member: ${user.name}`);
-        throw new Error(`${user.name} is already a member of this group`);
-      }
-
-      // Build member object, only including profileImage if it exists
+      // Build the new member object
       const newMember: GroupMember = {
         userId: user.id,
         name: user.name,
@@ -1178,41 +1186,30 @@ class FirebaseService {
         ...(!user.profileImageBase64 && user.profileImage && { profileImage: user.profileImage }),
       };
 
-      // Clean the member object to ensure no undefined/null values
       const cleanedMember = this.cleanObject(newMember);
 
-      const updatedMembers = [...group.members, cleanedMember];
-      console.log(`[addGroupMember] Updating group with ${updatedMembers.length} members`);
-      console.log(`[addGroupMember] New member data:`, JSON.stringify(cleanedMember, null, 2));
-
+      // Atomically update the members array on the server
+      // arrayUnion handles the check for existing members automatically
       await this._groupsCollection.doc(groupId).update({
-        members: updatedMembers,
+        members: FieldValue.arrayUnion(cleanedMember), // This is the key change
         updatedAt: new Date().toISOString(),
       });
+      console.log(`[addGroupMember] Successfully updated group using arrayUnion`);
 
-      console.log(`[addGroupMember] Successfully updated group in Firestore`);
-
-      // Return updated group
+      // Return the updated group
       const updatedGroup = await this.getGroupById(groupId);
       if (!updatedGroup) {
-        console.error(`[addGroupMember] Failed to fetch updated group`);
         throw new Error('Failed to fetch updated group');
       }
 
-      console.log(`[addGroupMember] Success! Member ${user.name} added to ${group.name}`);
+      console.log(`[addGroupMember] Success! Member ${user.name} added.`);
       return updatedGroup;
+
     } catch (error: any) {
       console.error('[addGroupMember] Error:', error.message || error);
-      console.error('[addGroupMember] Error details:', {
-        code: error.code,
-        name: error.name,
-        stack: error.stack
-      });
-      // Preserve the original error message
       throw error;
     }
   }
-
   /**
    * Remove member from group
    */
@@ -1229,13 +1226,13 @@ class FirebaseService {
       }
 
       const updatedMembers = group.members.filter(member => member.userId !== userId);
-      
+
       await this._groupsCollection.doc(groupId).update({
         members: updatedMembers,
         updatedAt: new Date().toISOString(),
       });
 
-      
+
       // Return updated group
       const updatedGroup = await this.getGroupById(groupId);
       if (!updatedGroup) {
@@ -1258,7 +1255,7 @@ class FirebaseService {
         isActive: false,
         updatedAt: new Date().toISOString(),
       });
-      
+
     } catch (error) {
       console.error('Error deactivating group:', error);
       throw new Error('Failed to deactivate group');
@@ -1272,7 +1269,7 @@ class FirebaseService {
    */
   async createGroupExpense(groupId: string, expenseData: Omit<GroupExpense, 'id'>): Promise<GroupExpense> {
     try {
-      
+
       // Verify group exists
       const group = await this.getGroupById(groupId);
       if (!group) {
@@ -1284,19 +1281,19 @@ class FirebaseService {
       const invalidParticipants = expenseData.participants.filter(
         p => !groupMemberIds.includes(p.id)
       );
-      
+
       if (invalidParticipants.length > 0) {
         throw new Error('Some participants are not members of this group');
       }
 
       // Create expense document
       const timestamp = new Date().toISOString();
-      
+
       // Filter out undefined values to prevent Firebase errors
       const cleanExpenseData = Object.fromEntries(
         Object.entries(expenseData).filter(([_, value]) => value !== undefined)
       );
-      
+
       const expenseDoc = {
         ...cleanExpenseData,
         updatedAt: timestamp,
@@ -1307,7 +1304,7 @@ class FirebaseService {
         .doc(groupId)
         .collection('expenses')
         .add(expenseDoc);
-      
+
       // Update group's total expenses
       await this._groupsCollection.doc(groupId).update({
         totalExpenses: firestore.FieldValue.increment(expenseData.amount),
@@ -1319,7 +1316,7 @@ class FirebaseService {
         ...expenseDoc,
       } as GroupExpense;
 
-      
+
       // Create activity log for expense creation
       try {
         await this.createActivity({
@@ -1338,7 +1335,7 @@ class FirebaseService {
         console.error('Error creating expense activity:', activityError);
         // Don't fail the expense creation if activity logging fails
       }
-      
+
       return expense;
     } catch (error: any) {
       console.error('Error creating expense:', error);
@@ -1354,12 +1351,12 @@ class FirebaseService {
    */
   async getGroupExpenses(groupId: string): Promise<GroupExpense[]> {
     try {
-      
+
       if (!groupId) {
         console.error('No groupId provided');
         return [];
       }
-      
+
       let snapshot;
       try {
         // Try with orderBy first
@@ -1479,7 +1476,7 @@ class FirebaseService {
           isActive: false,
           updatedAt: timestamp,
         });
-      
+
       // Update group's total expenses
       await this._groupsCollection.doc(groupId).update({
         totalExpenses: firestore.FieldValue.increment(-expenseData.amount),
@@ -1511,7 +1508,7 @@ class FirebaseService {
       // Process each expense
       expenses.forEach(expense => {
         const payerId = expense.paidBy.id;
-        
+
         expense.participants.forEach(participant => {
           if (participant.id !== payerId) {
             // Participant owes payer
@@ -1550,7 +1547,7 @@ class FirebaseService {
         id: docRef.id,
       };
 
-      
+
       // Create activity log for settlement creation
       try {
         await this.createActivity({
@@ -1568,7 +1565,7 @@ class FirebaseService {
         console.error('Error creating settlement activity:', activityError);
         // Don't fail the settlement creation if activity logging fails
       }
-      
+
       return createdSettlement;
     } catch (error) {
       console.error('Error creating settlement:', error);
@@ -1599,19 +1596,19 @@ class FirebaseService {
   async confirmSettlement(groupId: string, settlementId: string): Promise<void> {
     try {
       const timestamp = new Date().toISOString();
-      
+
       // Get settlement details before updating for activity logging
       const settlementDoc = await this._groupsCollection
         .doc(groupId)
         .collection('settlements')
         .doc(settlementId)
         .get();
-      
+
       const settlement = settlementDoc.data() as Settlement;
       if (!settlement) {
         throw new Error('Settlement not found');
       }
-      
+
       await this._groupsCollection
         .doc(groupId)
         .collection('settlements')
@@ -1622,7 +1619,7 @@ class FirebaseService {
           updatedAt: timestamp,
         });
 
-      
+
       // Create activity log for settlement confirmation
       try {
         await this.createActivity({
@@ -1684,15 +1681,15 @@ class FirebaseService {
 
   async getAllUserSettlements(userId: string): Promise<Settlement[]> {
     try {
-      
+
       // First get all groups user is part of
       const userGroups = await this.getUserGroups(userId);
       const groupIds = userGroups.map(group => group.id);
-      
+
       if (groupIds.length === 0) {
         return [];
       }
-      
+
       // Get all settlements from all groups in parallel
       const settlementPromises = groupIds.map(async (groupId) => {
         try {
@@ -1700,7 +1697,7 @@ class FirebaseService {
             .doc(groupId)
             .collection('settlements')
             .get();
-          
+
           return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -1710,22 +1707,22 @@ class FirebaseService {
           return [];
         }
       });
-      
+
       const allGroupSettlements = await Promise.all(settlementPromises);
       const allSettlements = allGroupSettlements.flat();
-      
+
       // Filter settlements that involve the user
-      const userSettlements = allSettlements.filter(settlement => 
+      const userSettlements = allSettlements.filter(settlement =>
         settlement.fromUserId === userId || settlement.toUserId === userId
       );
-      
+
       // Sort by creation date (most recent first)
       userSettlements.sort((a, b) => {
         const aTime = new Date(a.createdAt).getTime();
         const bTime = new Date(b.createdAt).getTime();
         return bTime - aTime;
       });
-      
+
       return userSettlements;
     } catch (error) {
       console.error('Error fetching all user settlements:', error);
@@ -1743,14 +1740,14 @@ class FirebaseService {
   async createActivity(activityData: Omit<Activity, 'id' | 'createdAt'>): Promise<Activity> {
     try {
       const timestamp = new Date().toISOString();
-      
+
       const activity: Omit<Activity, 'id'> = {
         ...activityData,
         createdAt: timestamp,
       };
 
       const docRef = await this._activitiesCollection.add(activity);
-      
+
       const createdActivity = {
         id: docRef.id,
         ...activity,
@@ -1760,7 +1757,7 @@ class FirebaseService {
       // Import is done dynamically to avoid circular dependencies
       const { NotificationService } = await import('./notificationService');
       await NotificationService.sendActivityNotification(createdActivity);
-      
+
       return createdActivity;
     } catch (error) {
       console.error('Error creating activity:', error);
@@ -1773,9 +1770,9 @@ class FirebaseService {
    */
   async deleteActivity(activityId: string): Promise<void> {
     try {
-      
+
       await this._activitiesCollection.doc(activityId).delete();
-      
+
     } catch (error) {
       console.error('Error deleting activity:', error);
       throw new Error('Failed to delete activity');
@@ -1787,7 +1784,7 @@ class FirebaseService {
    */
   async getUserActivities(userId: string, limit: number = 50): Promise<Activity[]> {
     try {
-      
+
       const snapshot = await this._activitiesCollection
         .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
@@ -1805,7 +1802,7 @@ class FirebaseService {
       return activities;
     } catch (error) {
       console.error('Error getting user activities:', error);
-      
+
       // If indexing fails, try without orderBy
       try {
         const snapshot = await this._activitiesCollection
@@ -1843,7 +1840,7 @@ class FirebaseService {
     try {
       if (groupIds.length === 0) return [];
 
-      
+
       const promises = groupIds.map(groupId =>
         this._activitiesCollection
           .where('groupId', '==', groupId)
@@ -1878,7 +1875,7 @@ class FirebaseService {
 
       // Limit final results
       const limitedActivities = activities.slice(0, limit);
-      
+
       return limitedActivities;
     } catch (error) {
       console.error('Error getting group activities:', error);
@@ -1932,10 +1929,10 @@ class FirebaseService {
   ): Promise<void> {
     try {
       const type = isConfirmation ? 'settlement_confirmed' : 'settlement_created';
-      const title = isConfirmation 
+      const title = isConfirmation
         ? `You confirmed payment from ${relatedUserName}`
         : `You marked payment to ${relatedUserName}`;
-      
+
       await this.createActivity({
         userId,
         userName,
@@ -1951,6 +1948,186 @@ class FirebaseService {
     } catch (error) {
       console.error('Error creating settlement activity:', error);
       // Don't throw error as this is not critical
+    }
+  }
+
+  // ========================================
+  // PERSONAL EXPENSE MANAGEMENT METHODS
+  // ========================================
+
+  /**
+   * Create a new personal expense
+   */
+  async createPersonalExpense(expenseData: Omit<PersonalExpense, 'id'>): Promise<PersonalExpense> {
+    try {
+      const timestamp = new Date().toISOString();
+
+      // Clean undefined values
+      const cleanExpenseData = this.cleanObject(expenseData);
+
+      const expenseDoc = {
+        ...cleanExpenseData,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        isActive: true,
+      };
+
+      const docRef = await this._personalExpensesCollection.add(expenseDoc);
+
+      const expense: PersonalExpense = {
+        id: docRef.id,
+        ...expenseDoc,
+      } as PersonalExpense;
+
+      return expense;
+    } catch (error: any) {
+      console.error('Error creating personal expense:', error);
+      if (error.code === 'firestore/permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
+      throw new Error(error.message || 'Failed to create personal expense');
+    }
+  }
+
+  /**
+   * Get all personal expenses for a user
+   */
+  async getPersonalExpenses(userId: string): Promise<PersonalExpense[]> {
+    try {
+      let snapshot;
+      try {
+        // Try with orderBy first
+        snapshot = await this._personalExpensesCollection
+          .where('userId', '==', userId)
+          .where('isActive', '==', true)
+          .orderBy('date', 'desc')
+          .get();
+      } catch (indexError: any) {
+        // Fallback: try without orderBy
+        try {
+          snapshot = await this._personalExpensesCollection
+            .where('userId', '==', userId)
+            .where('isActive', '==', true)
+            .get();
+        } catch (whereError: any) {
+          // Final fallback: get all and filter client-side
+          snapshot = await this._personalExpensesCollection
+            .where('userId', '==', userId)
+            .get();
+        }
+      }
+
+      const expenses: PersonalExpense[] = [];
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Filter out inactive expenses if we couldn't use where clause
+        if (data.isActive !== false) {
+          expenses.push({
+            id: doc.id,
+            ...data,
+          } as PersonalExpense);
+        }
+      });
+
+      // Sort on client side if we couldn't use orderBy
+      expenses.sort((a, b) => {
+        const aTime = new Date(a.date).getTime();
+        const bTime = new Date(b.date).getTime();
+        return bTime - aTime; // desc order
+      });
+
+      return expenses;
+    } catch (error: any) {
+      console.error('Error getting personal expenses:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Update a personal expense
+   */
+  async updatePersonalExpense(expenseId: string, updateData: Partial<PersonalExpense>): Promise<PersonalExpense> {
+    try {
+      const updateTimestamp = new Date().toISOString();
+      const cleanUpdateData = this.cleanObject(updateData);
+
+      await this._personalExpensesCollection
+        .doc(expenseId)
+        .update({
+          ...cleanUpdateData,
+          updatedAt: updateTimestamp,
+        });
+
+      // Return updated expense
+      const expenseDoc = await this._personalExpensesCollection
+        .doc(expenseId)
+        .get();
+
+      if (!expenseDoc.exists) {
+        throw new Error('Expense not found after update');
+      }
+
+      return {
+        id: expenseDoc.id,
+        ...expenseDoc.data(),
+      } as PersonalExpense;
+    } catch (error) {
+      console.error('Error updating personal expense:', error);
+      throw new Error('Failed to update personal expense');
+    }
+  }
+
+  /**
+   * Delete/deactivate a personal expense
+   */
+  async deletePersonalExpense(expenseId: string): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+
+      await this._personalExpensesCollection
+        .doc(expenseId)
+        .update({
+          isActive: false,
+          updatedAt: timestamp,
+        });
+    } catch (error) {
+      console.error('Error deactivating personal expense:', error);
+      throw new Error('Failed to deactivate personal expense');
+    }
+  }
+
+  /**
+   * Get personal expenses summary for a user (total amount, count, etc.)
+   */
+  async getPersonalExpensesSummary(userId: string): Promise<{
+    totalExpenses: number;
+    expenseCount: number;
+    categoryBreakdown: { [key: string]: number };
+  }> {
+    try {
+      const expenses = await this.getPersonalExpenses(userId);
+
+      const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+      const expenseCount = expenses.length;
+
+      const categoryBreakdown: { [key: string]: number } = {};
+      expenses.forEach(expense => {
+        const categoryName = expense.category.name;
+        categoryBreakdown[categoryName] = (categoryBreakdown[categoryName] || 0) + expense.amount;
+      });
+
+      return {
+        totalExpenses,
+        expenseCount,
+        categoryBreakdown,
+      };
+    } catch (error) {
+      console.error('Error getting personal expenses summary:', error);
+      return {
+        totalExpenses: 0,
+        expenseCount: 0,
+        categoryBreakdown: {},
+      };
     }
   }
 }

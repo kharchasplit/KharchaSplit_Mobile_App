@@ -122,8 +122,8 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   }, [permissionState.initialized, permissionState.status]);
 
   const getContactsPermission = () => {
-    return Platform.OS === 'android' 
-      ? PERMISSIONS.ANDROID.READ_CONTACTS 
+    return Platform.OS === 'android'
+      ? PERMISSIONS.ANDROID.READ_CONTACTS
       : PERMISSIONS.IOS.CONTACTS;
   };
 
@@ -262,7 +262,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Open Settings',
-              onPress: () => openSettings().catch(err => {})
+              onPress: () => openSettings().catch(err => { })
             },
           ]
         );
@@ -299,7 +299,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const normalizePhoneNumber = (phoneNumber: string): string => {
     // Remove all non-digit characters
     let cleaned = phoneNumber.replace(/\D/g, '');
-    
+
     // Handle Indian phone numbers - normalize to 10-digit format without country code
     if (cleaned.startsWith('91') && cleaned.length === 12) {
       // Remove country code 91
@@ -310,7 +310,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     } else if (cleaned.length === 10) {
       // Already in correct 10-digit format
     }
-    
+
     return cleaned;
   };
 
@@ -322,7 +322,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
       // Process contacts and get Firebase data simultaneously
       await processContactsWithRegistration(contactsList);
-      
+
       setContactsLoading(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to load contacts.');
@@ -342,7 +342,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           processedContactIds.add(contact.recordID);
 
           const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          
+
           if (primaryPhone.length === 10) {
             phoneNumbers.push(primaryPhone);
             allContacts.push({
@@ -357,14 +357,17 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       if (phoneNumbers.length > 0) {
         // Get registered users from Firebase
         const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
-        
+
         const registeredPhones = new Set<string>();
         const userProfileMap: { [key: string]: any } = {};
-        
+
         // Process registered users
         registeredUsers.forEach(userProfile => {
-          registeredPhones.add(userProfile.phoneNumber);
-          userProfileMap[userProfile.phoneNumber] = userProfile;
+          // Use your helper function on the backend number!
+          const normalizedPhone = normalizePhoneNumber(userProfile.phoneNumber);
+
+          registeredPhones.add(normalizedPhone); // Now adds "10-digit"
+          userProfileMap[normalizedPhone] = userProfile; // Use the same normalized key for the map
         });
 
         // Update all contacts with registration status
@@ -372,7 +375,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           .map(contact => {
             const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
             const isRegistered = registeredPhones.has(primaryPhone);
-            
+
             // Skip current user
             if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
               return null;
@@ -445,7 +448,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     try {
       const contactName = contact.displayName || 'Friend';
       const userReferralCode = user?.referralCode || user?.id || 'KHARCHASPLIT';
-      
+
       // Create invitation message with referral code
       const inviteMessage = `Hi ${contactName}! 👋\n\nI'm using KharchaSplit to split expenses with friends and family. It's super easy to track shared costs and settle payments!\n\n🎁 Join using my referral code: ${userReferralCode}\n\nDownload KharchaSplit now:\n📱 Android: https://play.google.com/store/apps/details?id=com.kharchasplit\n🍎 iOS: https://apps.apple.com/app/kharchasplit\n\nLet's split smarter together! 💰`;
 
@@ -531,8 +534,8 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
 
       Alert.alert(
-        'Success', 
-        `Group "${newGroup.name}" created successfully with ${newGroup.members.length} member(s)!`, 
+        'Success',
+        `Group "${newGroup.name}" created successfully with ${newGroup.members.length} member(s)!`,
         [
           {
             text: 'OK',
@@ -556,26 +559,26 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
     if (!searchQuery.trim()) {
       return true;
     }
-    
+
     const searchLower = searchQuery.toLowerCase().trim();
-    
+
     // Search by display name
     if (contact.displayName?.toLowerCase().includes(searchLower)) {
       return true;
     }
-    
+
     // Search by registered user profile name
     if (contact.userProfile?.name?.toLowerCase().includes(searchLower)) {
       return true;
     }
-    
+
     // Search by phone number (digits only)
-    if (contact.phoneNumbers?.some(phone => 
+    if (contact.phoneNumbers?.some(phone =>
       phone.number.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, ''))
     )) {
       return true;
     }
-    
+
     return false;
   });
 
@@ -706,7 +709,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
               <View>
                 {[...Array(8)].map((_, index) => (
                   <View key={index} style={styles.skeletonContactItem}>
-                    <Animated.View 
+                    <Animated.View
                       style={[
                         styles.skeletonAvatar,
                         {
@@ -715,10 +718,10 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                             outputRange: [0.3, 0.7],
                           }),
                         },
-                      ]} 
+                      ]}
                     />
                     <View style={styles.skeletonContent}>
-                      <Animated.View 
+                      <Animated.View
                         style={[
                           styles.skeletonName,
                           {
@@ -727,9 +730,9 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                               outputRange: [0.3, 0.7],
                             }),
                           },
-                        ]} 
+                        ]}
                       />
-                      <Animated.View 
+                      <Animated.View
                         style={[
                           styles.skeletonPhone,
                           {
@@ -738,10 +741,10 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                               outputRange: [0.3, 0.7],
                             }),
                           },
-                        ]} 
+                        ]}
                       />
                     </View>
-                    <Animated.View 
+                    <Animated.View
                       style={[
                         styles.skeletonButton,
                         {
@@ -750,7 +753,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                             outputRange: [0.3, 0.7],
                           }),
                         },
-                      ]} 
+                      ]}
                     />
                   </View>
                 ))}
@@ -793,10 +796,10 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
                         ]}
                         onPress={() => handleSelectMember(contact)}
                       >
-                        <Ionicons 
-                          name={selectedMembers.find(m => m.recordID === contact.recordID) ? "checkmark" : "add"} 
-                          size={16} 
-                          color="white" 
+                        <Ionicons
+                          name={selectedMembers.find(m => m.recordID === contact.recordID) ? "checkmark" : "add"}
+                          size={16}
+                          color="white"
                         />
                         <Text style={styles.actionButtonText}>
                           {selectedMembers.find(m => m.recordID === contact.recordID) ? 'Added' : 'Add'}
@@ -874,7 +877,7 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
         </View>
 
       </ScrollView>
-      
+
       {/* Fixed Save Button */}
       <TouchableOpacity
         style={[styles.saveButton, loading && styles.saveButtonDisabled]}
@@ -945,9 +948,9 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     membersSection: { paddingHorizontal: 16, marginBottom: 24 },
     sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginBottom: 8 },
-    sectionSubtitle: { 
-      fontSize: 14, 
-      color: colors.secondaryText, 
+    sectionSubtitle: {
+      fontSize: 14,
+      color: colors.secondaryText,
       marginBottom: 16,
       lineHeight: 18,
     },
@@ -974,9 +977,9 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     contactInfo: {
       flex: 1,
     },
-    contactName: { 
-      fontSize: 16, 
-      fontWeight: '600', 
+    contactName: {
+      fontSize: 16,
+      fontWeight: '600',
       color: colors.primaryText,
       marginBottom: 4,
     },
