@@ -28,17 +28,18 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
 
   useEffect(() => {
     // Shimmer effect animation
-    Animated.loop(
+    const shimmerAnimation = Animated.loop(
       Animated.timing(translateX, {
         toValue: 2,
         duration: 1500,
         easing: Easing.ease,
         useNativeDriver: true,
       })
-    ).start();
+    );
+    shimmerAnimation.start();
 
     // Pulse animation
-    Animated.loop(
+    const pulseAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
@@ -53,20 +54,34 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
           useNativeDriver: true,
         }),
       ])
-    ).start();
-  }, [animatedValue, translateX]);
+    );
+    pulseAnimation.start();
+
+    // Cleanup animations on unmount
+    return () => {
+      shimmerAnimation.stop();
+      pulseAnimation.stop();
+    };
+  }, []);
 
   const opacity = animatedValue.interpolate({
     inputRange: [0, 1],
     outputRange: [0.6, 0.8],
   });
 
+  // Convert width to number if it's a percentage string
+  const numericWidth = typeof width === 'string' && width.includes('%')
+    ? undefined
+    : typeof width === 'number'
+    ? width
+    : parseFloat(width as string);
+
   return (
     <View
       style={[
         {
-          width,
-          height,
+          width: width as any,
+          height: height as any,
           borderRadius,
           backgroundColor: colors.inputBackground,
         },
@@ -83,31 +98,33 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
           },
         ]}
       />
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            transform: [
-              {
-                translateX: translateX.interpolate({
-                  inputRange: [-1, 2],
-                  outputRange: [-width as number, width as number],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <View
+      {numericWidth && (
+        <Animated.View
           style={[
-            styles.shimmerBar,
+            StyleSheet.absoluteFillObject,
             {
-              width: width as number * 0.5,
-              backgroundColor: colors.background,
-            }
+              transform: [
+                {
+                  translateX: translateX.interpolate({
+                    inputRange: [-1, 2],
+                    outputRange: [-numericWidth, numericWidth],
+                  }),
+                },
+              ],
+            },
           ]}
-        />
-      </Animated.View>
+        >
+          <View
+            style={[
+              styles.shimmerBar,
+              {
+                width: numericWidth * 0.5,
+                backgroundColor: colors.background,
+              }
+            ]}
+          />
+        </Animated.View>
+      )}
     </View>
   );
 };

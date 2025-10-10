@@ -51,7 +51,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationEnd }) =>
     }, 400);
 
     // Pulse animation
-    Animated.loop(
+    const pulseAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.05,
@@ -64,18 +64,22 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationEnd }) =>
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
+    pulseAnimation.start();
 
-    // End splash screen
+    // End splash screen - reduced from 2500ms to 1500ms
     const timer = setTimeout(() => {
       Animated.timing(logoOpacity, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
       }).start(() => onAnimationEnd());
-    }, 2500);
+    }, 1500);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      pulseAnimation.stop();
+    };
   }, [onAnimationEnd]);
 
   return (

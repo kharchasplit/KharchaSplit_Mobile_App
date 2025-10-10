@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -18,11 +18,15 @@ const AppContent: React.FC = () => {
   const { colors } = useTheme();
   const [showSplash, setShowSplash] = useState(true);
 
-  // Initialize FCM when user is authenticated
+  // Initialize FCM when user is authenticated (non-blocking)
   useEffect(() => {
     if (isAuthenticated && user) {
+      // Run FCM initialization in background without blocking UI
       const initializeFCM = async () => {
         try {
+          // Delay FCM initialization slightly to not block initial render
+          await new Promise<void>(resolve => setTimeout(resolve, 100));
+
           // Request permission and initialize FCM
           const authStatus = await messaging().requestPermission();
           const enabled =
@@ -38,11 +42,12 @@ const AppContent: React.FC = () => {
         }
       };
 
+      // Don't await - let it run in background
       initializeFCM();
     }
   }, [isAuthenticated, user]);
 
-  // Show splash screen first
+  // Show splash screen first (colors are now guaranteed to be available)
   if (showSplash) {
     return (
       <SplashScreen onAnimationEnd={() => setShowSplash(false)} />

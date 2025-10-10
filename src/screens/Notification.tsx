@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,12 @@ import {
   TouchableOpacity,
   StatusBar,
   Switch,
+  Alert,
+  Linking,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import messaging from '@react-native-firebase/messaging';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,30 +20,137 @@ type NotificationOption = {
   id: number;
   title: string;
   isEnabled: boolean;
+  key: string;
 };
 
 type NotificationsProps = {
   onClose: () => void;
 };
 
+const NOTIFICATION_PREFS_KEY = '@notification_preferences';
+
 export const Notifications: React.FC<NotificationsProps> = ({ onClose }) => {
   const { colors } = useTheme();
   const [isEnabled, setIsEnabled] = useState<boolean>(false);
   const [notifymeOptions, setNotifyMeOptions] = useState<NotificationOption[]>([
-    { id: 1, title: 'When I am added to a group', isEnabled: false },
-    { id: 2, title: 'When an expense is added', isEnabled: false },
-    { id: 3, title: 'When a payment is Settled', isEnabled: false },
+    { id: 1, title: 'When I am added to a group', isEnabled: true, key: 'groupAdded' },
+    { id: 2, title: 'When an expense is added', isEnabled: true, key: 'expenseAdded' },
+    { id: 3, title: 'When a payment is Settled', isEnabled: true, key: 'paymentSettled' },
   ]);
 
-  const toggleSwitch = () => setIsEnabled(prev => !prev);
+  // Check system notification permission
+  const checkNotificationPermission = React.useCallback(async () => {
+    try {
+      const authStatus = await messaging().hasPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+      setIsEnabled(enabled);
+    } catch (error) {
+      console.error('Error checking notification permission:', error);
+    }
+  }, []);
+
+  // Load saved notification preferences
+  const loadNotificationPreferences = React.useCallback(async () => {
+    try {
+      const savedPrefs = await AsyncStorage.getItem(NOTIFICATION_PREFS_KEY);
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs);
+        setNotifyMeOptions(prevOptions =>
+          prevOptions.map(item => ({
+            ...item,
+            isEnabled: prefs[item.key] ?? item.isEnabled,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Error loading notification preferences:', error);
+    }
+  }, []);
+
+  // Load notification permission status and preferences on mount
+  useEffect(() => {
+    checkNotificationPermission();
+    loadNotificationPreferences();
+  }, [checkNotificationPermission, loadNotificationPreferences]);
+
+  // Save notification preferences
+  const saveNotificationPreferences = async (options: NotificationOption[]) => {
+    try {
+      const prefs: Record<string, boolean> = {};
+      options.forEach(option => {
+        prefs[option.key] = option.isEnabled;
+      });
+      await AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      console.error('Error saving notification preferences:', error);
+    }
+  };
+
+  const toggleSwitch = async () => {
+    if (!isEnabled) {
+      // Try to request permission
+      try {
+        const authStatus = await messaging().requestPermission();
+        const granted =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (granted) {
+          setIsEnabled(true);
+        } else {
+          // Permission denied, show alert to go to settings
+          Alert.alert(
+            'Notification Permission Required',
+            'Please enable notifications in your device settings to receive updates.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => Linking.openSettings(),
+              },
+            ]
+          );
+        }
+      } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        Alert.alert('Error', 'Failed to request notification permission');
+      }
+    } else {
+      // Disable notifications - show alert to go to settings
+      Alert.alert(
+        'Disable Notifications',
+        'To disable notifications, please go to your device settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: () => Linking.openSettings(),
+          },
+        ]
+      );
+    }
+  };
 
   const toggleNotifyMeSwitch = (id: number) => {
-    setNotifyMeOptions(prevOptions =>
-      prevOptions.map(item =>
-        item.id === id ? { ...item, isEnabled: !item.isEnabled } : item,
-      ),
+    const updatedOptions = notifymeOptions.map(item =>
+      item.id === id ? { ...item, isEnabled: !item.isEnabled } : item,
     );
+    setNotifyMeOptions(updatedOptions);
+    // Save preferences to AsyncStorage
+    saveNotificationPreferences(updatedOptions);
   };
+
+  // Re-check permission when screen gains focus
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkNotificationPermission();
+    }, 1000); // Check every second while screen is open
+
+    return () => clearInterval(interval);
+  }, [checkNotificationPermission]);
 
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },

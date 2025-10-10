@@ -1,5 +1,4 @@
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-import { FieldValue } from 'firebase-admin/firestore';
 
 export interface UserProfile {
   id: string;
@@ -1191,7 +1190,7 @@ class FirebaseService {
       // Atomically update the members array on the server
       // arrayUnion handles the check for existing members automatically
       await this._groupsCollection.doc(groupId).update({
-        members: FieldValue.arrayUnion(cleanedMember), // This is the key change
+        members: firestore.FieldValue.arrayUnion(cleanedMember), // This is the key change
         updatedAt: new Date().toISOString(),
       });
       console.log(`[addGroupMember] Successfully updated group using arrayUnion`);

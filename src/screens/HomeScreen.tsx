@@ -12,6 +12,7 @@ import {
   RefreshControl,
   StatusBar,
   Animated,
+  Alert,
   // --- RESPONSIVE ---
   useWindowDimensions,
 } from 'react-native';
@@ -24,10 +25,13 @@ import { firebaseService } from '../services/firebaseService';
 // We now use this object to create scaled sizes
 import { typography } from '../utils/typography';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { ensureDataUri } from '../utils/imageUtils';
 import { FCMTokenManager } from '../services/fcmTokenManager';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeScreenSkeleton } from '../components/SkeletonLoader';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // (Interfaces remain the same)
 interface GroupDetail {
@@ -208,43 +212,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       
       const userGroups = await firebaseService.getUserGroups(user.id);
       
-      // Calculate balances for each group
-      const convertedGroups: Group[] = await Promise.all(
-        userGroups.map(async (group) => {
-          let youOwe = 0;
-          let youAreOwed = 0;
-          let details: GroupDetail[] = [];
-          
-          try {
-            // Get expenses for this group
-            const groupExpenses = await firebaseService.getGroupExpenses(group.id);
-            
-            // Calculate user's balance in this group
-            const balance = calculateUserGroupBalance(groupExpenses, user.id, group.members);
-            youOwe = Math.max(0, -balance.netBalance);
-            youAreOwed = Math.max(0, balance.netBalance);
-            details = balance.details;
-            
-          } catch (expenseError) {
-            // Silently handle expense loading errors
-          }
+      // Calculate balances for each group - OPTIMIZED: Load in batches
+      const convertedGroups: Group[] = userGroups.map((group) => {
+        // Return group with placeholder balances - will be calculated on-demand
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          avatar: group.coverImageBase64 ? null : '🎭',
+          coverImageUrl: group.coverImageBase64 || null,
+          youOwe: 0, // Will be updated later if needed
+          youAreOwed: 0, // Will be updated later if needed
+          details: [], // Will be calculated when user opens group
+          moreBalances: 0,
+          members: group.members,
+          createdAt: group.createdAt,
+          totalExpenses: group.totalExpenses || 0,
+        };
+      });
 
-          return {
-            id: group.id,
-            name: group.name,
-            description: group.description,
-            avatar: group.coverImageBase64 ? null : '🎭',
-            coverImageUrl: group.coverImageBase64 || null,
-            youOwe,
-            youAreOwed,
-            details,
-            moreBalances: details.length > 3 ? details.length - 3 : 0,
-            members: group.members,
-            createdAt: group.createdAt,
-            totalExpenses: group.totalExpenses,
-          };
-        })
-      );
+      // Load expenses for all groups in parallel (non-blocking)
+      // This happens in background and updates UI incrementally
+      loadGroupBalancesInBackground(userGroups);
       
       setGroups(convertedGroups);
       
@@ -262,6 +251,51 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       // Keep existing groups on error - don't clear the state
     } finally {
       setGroupsLoading(false);
+    }
+  };
+
+  // Background loading of group balances (non-blocking)
+  const loadGroupBalancesInBackground = async (userGroups: any[]) => {
+    if (!user) return;
+
+    try {
+      // Load expenses for all groups in parallel
+      const balancePromises = userGroups.map(async (group, index) => {
+        try {
+          const groupExpenses = await firebaseService.getGroupExpenses(group.id);
+          const balance = calculateUserGroupBalance(groupExpenses, user.id, group.members);
+
+          // Update the specific group in the state
+          setGroups(prevGroups => {
+            const updatedGroups = [...prevGroups];
+            if (updatedGroups[index]) {
+              updatedGroups[index] = {
+                ...updatedGroups[index],
+                youOwe: Math.max(0, -balance.netBalance),
+                youAreOwed: Math.max(0, balance.netBalance),
+                details: balance.details,
+                moreBalances: balance.details.length > 3 ? balance.details.length - 3 : 0,
+              };
+            }
+            return updatedGroups;
+          });
+
+          return balance;
+        } catch (error) {
+          return null;
+        }
+      });
+
+      // Wait for all balances to load
+      await Promise.all(balancePromises);
+
+      // Recalculate overall balance after all groups are loaded
+      setGroups(prevGroups => {
+        calculateOverallBalance(prevGroups);
+        return prevGroups;
+      });
+    } catch (error) {
+      console.error('Error loading group balances:', error);
     }
   };
 
@@ -314,17 +348,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const loadGroupsAndBalance = async () => {
     setBalanceLoading(true);
 
-    // Show skeleton loader for minimum duration (for better UX)
-    const minLoadingTime = new Promise<void>(resolve => setTimeout(() => resolve(), 1000));
-
-    // Load groups from Firebase with real expense calculations
+    // Load groups from Firebase (now optimized - no longer waits for all expenses)
     const dataPromise = loadGroupsFromFirebase();
 
-    // Load personal expenses summary
+    // Load personal expenses summary in parallel
     const personalExpensesPromise = loadPersonalExpensesSummary();
 
-    // Wait for both data loading and minimum loading time
-    await Promise.all([dataPromise, personalExpensesPromise, minLoadingTime]);
+    // Wait for both to complete
+    await Promise.all([dataPromise, personalExpensesPromise]);
 
     setBalanceLoading(false);
 
@@ -407,6 +438,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     if (showSearchBar) setSearchQuery('');
   };
 
+  const handleDeleteGroup = async (groupId: string, groupName: string) => {
+    if (!user) return;
+
+    Alert.alert(
+      'Delete Group',
+      `Are you sure you want to delete "${groupName}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firebaseService.deleteGroup(groupId);
+
+              // Remove from local state
+              setGroups(prev => prev.filter(g => g.id !== groupId));
+
+              Alert.alert('Success', 'Group deleted successfully');
+            } catch (error) {
+              console.error('Error deleting group:', error);
+              Alert.alert('Error', 'Failed to delete group. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const filteredGroups = groups.filter(
     group =>
       group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -414,6 +477,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         detail.text.toLowerCase().includes(searchQuery.toLowerCase())
       )
   );
+
+  // Render right swipe action (delete button)
+  const renderRightActions = (group: Group) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => handleDeleteGroup(group.id, group.name)}
+      >
+        <Ionicons name="trash-outline" size={scale(24)} color="#FFFFFF" />
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </TouchableOpacity>
+    );
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -440,6 +516,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaView style={styles.container}>
        {/* --- STATUS BAR FIX --- */}
        {/* Use dynamic status bar style from theme colors */}
@@ -560,45 +637,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         ) : (
           <>
             {filteredGroups.map(group => (
-              <TouchableOpacity
+              <Swipeable
                 key={group.id}
-                style={styles.groupCard}
-                onPress={() => navigation.navigate('GroupDetail', { group })}
+                renderRightActions={() => renderRightActions(group)}
+                overshootRight={false}
               >
-                <View style={styles.groupHeader}>
-                  <View style={styles.avatarContainer}>
-                    {group.coverImageUrl ? (
-                      <Image source={{ uri: ensureDataUri(group.coverImageUrl) || '' }} style={styles.avatarImage} />
+                <TouchableOpacity
+                  style={styles.groupCard}
+                  onPress={() => navigation.navigate('GroupDetail', { group })}
+                >
+                  <View style={styles.groupHeader}>
+                    <View style={styles.avatarContainer}>
+                      {group.coverImageUrl ? (
+                        <Image source={{ uri: ensureDataUri(group.coverImageUrl) || '' }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatar}>{group.avatar}</Text>
+                      )}
+                    </View>
+                    <View style={styles.groupInfo}>
+                      <Text style={styles.groupName}>{group.name}</Text>
+                      {group.description && (
+                        <Text style={styles.groupDescription}>{group.description}</Text>
+                      )}
+                      <Text style={styles.membersCount}>{group.members?.length || 0} members</Text>
+                    </View>
+                  </View>
+                  <View style={styles.groupDetails}>
+                    {group.details.length > 0 ? (
+                      group.details.map((detail, idx) => (
+                        <View key={idx} style={styles.detailRow}>
+                          <Text style={styles.detailText}>{detail.text}</Text>
+                          <Text style={styles.detailText}>
+                            {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
+                          </Text>
+                        </View>
+                      ))
                     ) : (
-                      <Text style={styles.avatar}>{group.avatar}</Text>
+                      <Text style={styles.noExpensesText}>No expenses yet</Text>
                     )}
+                    {group.moreBalances ? (
+                      <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
+                    ) : null}
                   </View>
-                  <View style={styles.groupInfo}>
-                    <Text style={styles.groupName}>{group.name}</Text>
-                    {group.description && (
-                      <Text style={styles.groupDescription}>{group.description}</Text>
-                    )}
-                    <Text style={styles.membersCount}>{group.members?.length || 0} members</Text>
-                  </View>
-                </View>
-                <View style={styles.groupDetails}>
-                  {group.details.length > 0 ? (
-                    group.details.map((detail, idx) => (
-                      <View key={idx} style={styles.detailRow}>
-                        <Text style={styles.detailText}>{detail.text}</Text>
-                        <Text style={styles.detailText}>
-                          {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
-                        </Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.noExpensesText}>No expenses yet</Text>
-                  )}
-                  {group.moreBalances ? (
-                    <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
-                  ) : null}
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </Swipeable>
             ))}
             
             {/* See All Groups Button */}
@@ -646,6 +728,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </Modal>
       </Animated.View>
     </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 
@@ -905,5 +988,20 @@ const createStyles = (
       color: colors.primaryText,
       fontSize: fonts.subtitle,
       fontWeight: '700',
+    },
+    deleteAction: {
+      backgroundColor: '#FF3B30',
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: scale(80),
+      marginVertical: scale(8),
+      borderRadius: scale(8),
+      marginRight: scale(16),
+    },
+    deleteActionText: {
+      color: '#FFFFFF',
+      fontSize: fonts.caption,
+      fontWeight: '600',
+      marginTop: scale(4),
     },
   });

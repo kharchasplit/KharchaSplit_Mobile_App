@@ -26,6 +26,8 @@ import { ensureDataUri } from '../utils/imageUtils';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { typography } from '../utils/typography'; // Assuming this path is correct
 import { ExpensesSkeleton, BalancesSkeleton, SettlementSkeleton } from '../components/SkeletonLoader';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // --- ANIMATION ---
 // Enable LayoutAnimation for Android
@@ -159,10 +161,11 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       // Import Firebase service dynamically
       const { firebaseService } = await import('../services/firebaseService');
 
-      // Load real group data
-      const [updatedGroup, groupExpenses] = await Promise.all([
+      // Load all data in parallel (group, expenses, settlements)
+      const [updatedGroup, groupExpenses, loadedFirebaseSettlements] = await Promise.all([
         firebaseService.getGroupById(groupId),
-        firebaseService.getGroupExpenses(groupId)
+        firebaseService.getGroupExpenses(groupId),
+        firebaseService.getGroupSettlements(groupId).catch(() => [])
       ]);
 
       if (updatedGroup) {
@@ -234,13 +237,8 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 
       setExpenses(transformedExpenses);
 
-      // Load Firebase settlements first
-      let loadedFirebaseSettlements: Settlement[] = [];
-      try {
-        loadedFirebaseSettlements = await firebaseService.getGroupSettlements(currentGroup.id);
-        setFirebaseSettlements(loadedFirebaseSettlements);
-      } catch (settlementError) {
-      }
+      // Set the settlements that were loaded in parallel
+      setFirebaseSettlements(loadedFirebaseSettlements);
 
       // Calculate balances dynamically, excluding paid settlements
       const paidSettlements = loadedFirebaseSettlements.filter(s => s.status === 'paid');
@@ -488,6 +486,88 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   }, [settlements, firebaseSettlements, balances, currentUserId, currentGroup.id, navigation]);
 
+  const handleDeleteGroup = useCallback(async () => {
+    try {
+      Alert.alert(
+        'Delete Group',
+        `Are you sure you want to delete "${currentGroup.name}"? This action cannot be undone and will permanently remove all expenses and settlements.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                setLoading(true);
+                const { firebaseService } = await import('../services/firebaseService');
+                await firebaseService.deleteGroup(currentGroup.id);
+
+                Alert.alert(
+                  'Group Deleted',
+                  'The group has been deleted successfully.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => navigation.navigate('Home'),
+                    }
+                  ]
+                );
+              } catch (error) {
+                console.error('Error deleting group:', error);
+                Alert.alert('Error', 'Failed to delete group. Please try again.');
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete group. Please try again.');
+    }
+  }, [currentGroup.id, currentGroup.name, navigation]);
+
+  const handleDeleteExpense = useCallback(async (expenseId: string, expenseDescription: string) => {
+    try {
+      Alert.alert(
+        'Delete Expense',
+        `Are you sure you want to delete "${expenseDescription}"? This action cannot be undone.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { firebaseService } = await import('../services/firebaseService');
+                await firebaseService.deleteExpense(currentGroup.id, expenseId);
+
+                // Remove expense from local state
+                setExpenses(prev => prev.filter(exp => exp.id !== expenseId));
+
+                // Reload group data to update balances
+                await loadGroupData();
+
+                Alert.alert('Success', 'Expense deleted successfully');
+              } catch (error) {
+                console.error('Error deleting expense:', error);
+                Alert.alert('Error', 'Failed to delete expense. Please try again.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete expense. Please try again.');
+    }
+  }, [currentGroup.id, loadGroupData]);
+
   // Helper function to calculate balances from expenses
   const calculateBalancesFromExpenses = useCallback((expenses: any[], members: any[], paidSettlements: Settlement[] = []) => {
     const balances: Record<string, { net: number }> = {};
@@ -713,6 +793,19 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // --- RENDER FUNCTIONS ---
 
+  // Render right swipe action (delete button) for expenses
+  const renderExpenseRightActions = (expense: any) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteExpenseAction}
+        onPress={() => handleDeleteExpense(expense.id, expense.description)}
+      >
+        <Ionicons name="trash-outline" size={scale(24)} color="#FFFFFF" />
+        <Text style={styles.deleteExpenseActionText}>Delete</Text>
+      </TouchableOpacity>
+    );
+  };
+
   const renderExpenses = () => {
     if (loading) {
       return <ExpensesSkeleton />;
@@ -777,44 +870,49 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
               const paymentStatus = getExpensePaymentStatus(expense);
 
               return (
-                <TouchableOpacity
+                <Swipeable
                   key={expense.id}
-                  style={styles.expenseItem}
-                  onPress={() =>
-                    navigation.navigate('ExpenseDetail', {
-                      expense,
-                      group: {
-                        ...group,
-                        members: groupMembers
-                      }
-                    })
-                  }>
-                  <View
-                    style={[styles.expenseIcon, { backgroundColor: category.color }]}>
-                    <Text style={styles.expenseIconText}>{category.emoji}</Text>
-                  </View>
-                  <View style={styles.expenseDetails}>
-                    <View style={styles.expenseTitleRow}>
-                      <Text style={styles.expenseTitle} numberOfLines={1}>{expense.description}</Text>
-                      {paymentStatus.label && (
-                        <View style={[styles.statusTag, { backgroundColor: paymentStatus.color + '20', borderColor: paymentStatus.color }]}>
-                          <Text style={[styles.statusTagText, { color: paymentStatus.color }]}>
-                            {paymentStatus.label}
-                          </Text>
-                        </View>
-                      )}
+                  renderRightActions={() => renderExpenseRightActions(expense)}
+                  overshootRight={false}
+                >
+                  <TouchableOpacity
+                    style={styles.expenseItem}
+                    onPress={() =>
+                      navigation.navigate('ExpenseDetail', {
+                        expense,
+                        group: {
+                          ...group,
+                          members: groupMembers
+                        }
+                      })
+                    }>
+                    <View
+                      style={[styles.expenseIcon, { backgroundColor: category.color }]}>
+                      <Text style={styles.expenseIconText}>{category.emoji}</Text>
                     </View>
-                    <Text style={styles.expenseSubtitle}>
-                      Paid by {expense.paidBy === currentUserId ? 'You' : expense.paidByName}
-                    </Text>
-                  </View>
-                  <View style={styles.expenseAmounts}>
-                    <Text style={styles.expenseAmount}>
-                      ₹{(expense.amount || 0).toFixed(0)}
-                    </Text>
-                    <Text style={styles.expenseShare}>₹{yourShare.toFixed(0)}</Text>
-                  </View>
-                </TouchableOpacity>
+                    <View style={styles.expenseDetails}>
+                      <View style={styles.expenseTitleRow}>
+                        <Text style={styles.expenseTitle} numberOfLines={1}>{expense.description}</Text>
+                        {paymentStatus.label && (
+                          <View style={[styles.statusTag, { backgroundColor: paymentStatus.color + '20', borderColor: paymentStatus.color }]}>
+                            <Text style={[styles.statusTagText, { color: paymentStatus.color }]}>
+                              {paymentStatus.label}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.expenseSubtitle}>
+                        Paid by {expense.paidBy === currentUserId ? 'You' : expense.paidByName}
+                      </Text>
+                    </View>
+                    <View style={styles.expenseAmounts}>
+                      <Text style={styles.expenseAmount}>
+                        ₹{(expense.amount || 0).toFixed(0)}
+                      </Text>
+                      <Text style={styles.expenseShare}>₹{yourShare.toFixed(0)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </Swipeable>
               );
             })}
           </View>
@@ -1123,8 +1221,9 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // --- JSX ---
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={scale(24)} color={colors.primaryText} />
         </TouchableOpacity>
@@ -1296,6 +1395,11 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
                   <MaterialIcons name="check-circle" size={scale(20)} color={colors.success ?? '#10B981'} style={styles.optionIconStyle} />
                   <Text style={[styles.optionText, styles.completeText]}>Complete Group</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity style={styles.optionItem} onPress={() => { setShowGroupOptions(false); handleDeleteGroup(); }}>
+                  <MaterialIcons name="delete" size={scale(20)} color={colors.error ?? '#EF4444'} style={styles.optionIconStyle} />
+                  <Text style={[styles.optionText, styles.deleteText]}>Delete Group</Text>
+                </TouchableOpacity>
               </>
             ) : (
               <TouchableOpacity style={styles.optionItem} onPress={() => { setShowGroupOptions(false); handleLeaveGroup(); }}>
@@ -1314,10 +1418,11 @@ export const GroupDetailScreen: React.FC<Props> = ({ route, navigation }) => {
               </TouchableOpacity>
             </View>
 
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </SafeAreaView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 
@@ -1465,6 +1570,7 @@ const createStyles = (
       paddingVertical: scale(12),
       borderBottomWidth: 1,
       borderBottomColor: colors.background,
+      backgroundColor: colors.cardBackground,
     },
     expenseIcon: {
       width: scale(40),
@@ -1729,6 +1835,21 @@ const createStyles = (
     leaveText: { color: colors.error ?? '#EF4444' },
     deleteText: { color: colors.error ?? '#EF4444', fontWeight: '600' },
     completeText: { color: colors.success ?? '#10B981', fontWeight: '600' },
+    deleteExpenseAction: {
+      backgroundColor: '#FF3B30',
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: scale(80),
+      marginVertical: scale(2),
+      borderRadius: scale(8),
+      marginLeft: scale(16),
+    },
+    deleteExpenseActionText: {
+      color: '#FFFFFF',
+      fontSize: fonts.caption,
+      fontWeight: '600',
+      marginTop: scale(4),
+    },
     cancelButtonContainer: {
       borderTopWidth: 1,
       borderTopColor: colors.background,
