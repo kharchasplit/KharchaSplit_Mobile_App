@@ -85,44 +85,46 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const loadGroupData = useCallback(async () => {
     if (!group?.id) {
+      console.error('GroupDetailsScreen: No group ID provided');
+      Alert.alert('Error', 'Group information is missing. Please try again.');
+      navigation.goBack();
       return;
     }
-    
-    
+
     try {
       setLoading(true);
-      
-      // Load latest group data
-      const updatedGroup = await firebaseService.getGroupById(group.id);
+
+      // Load all data in parallel for faster loading
+      const [updatedGroup, groupExpenses, settlementHistory] = await Promise.all([
+        firebaseService.getGroupById(group.id),
+        firebaseService.getGroupExpenses(group.id),
+        firebaseService.getGroupSettlements(group.id)
+      ]);
+
+      // Update state in batch
       if (updatedGroup) {
         setGroup(updatedGroup);
+        const members = updatedGroup.members;
+
+        // Calculate balances
+        calculateBalances(groupExpenses, members);
       }
-      
-      // Load expenses
-      const groupExpenses = await firebaseService.getGroupExpenses(group.id);
-      
-      
+
       setExpenses(groupExpenses);
-      
-      // Calculate balances
-      const members = updatedGroup?.members || group.members;
-      calculateBalances(groupExpenses, members);
-      
-      // Load settlement history from Firebase
-      const settlementHistory = await firebaseService.getGroupSettlements(group.id);
       setFirebaseSettlements(settlementHistory);
-      
+
     } catch (error) {
       console.error('Error loading group data:', error);
       Alert.alert('Error', 'Failed to load group data');
     } finally {
       setLoading(false);
     }
-  }, [group.id, group.members]);
+  }, [group.id]);
 
+  // Load data only once on mount
   useEffect(() => {
     loadGroupData();
-  }, [loadGroupData]);
+  }, []); // Empty dependency array - load only once
 
   // Recalculate settlements when firebase settlements change
   useEffect(() => {
@@ -131,13 +133,17 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   }, [firebaseSettlements, balances]);
 
-  // Refresh data when screen comes into focus (e.g., returning from AddExpense)
+  // Refresh data when screen comes into focus ONLY if navigating back
+  const hasLoadedOnce = React.useRef(false);
   useFocusEffect(
     useCallback(() => {
-      if (!loading) {
+      if (hasLoadedOnce.current && !loading) {
+        // Only reload on subsequent focuses (e.g., coming back from another screen)
         loadGroupData();
+      } else {
+        hasLoadedOnce.current = true;
       }
-    }, [loading, loadGroupData])
+    }, [loading])
   );
 
   const onRefresh = useCallback(async () => {

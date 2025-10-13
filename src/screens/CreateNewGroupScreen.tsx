@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { firebaseService, CreateGroup } from '../services/firebaseService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ensureDataUri } from '../utils/imageUtils';
+import { contactsCacheService } from '../services/contactsCacheService';
 
 interface GroupData {
   name: string;
@@ -70,8 +71,9 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Only check permissions once on mount
+    // Initialize cache and check permissions once on mount
     if (!permissionState.initialized) {
+      contactsCacheService.init();
       checkContactsPermission();
     }
   }, []); // Remove dependencies to prevent re-runs
@@ -332,9 +334,11 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
 
   const processContactsWithRegistration = async (contactsList: Contact[]) => {
     try {
-      // Process all contacts first
+      console.log('[CreateGroup] Processing', contactsList.length, 'contacts with cache optimization');
+
+      // Process contacts and separate cached from uncached
       const allContacts: FilteredContact[] = [];
-      const phoneNumbers: string[] = [];
+      const uncachedPhones: string[] = [];
       const processedContactIds = new Set<string>();
 
       contactsList.forEach(contact => {
@@ -344,78 +348,109 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
           const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
 
           if (primaryPhone.length === 10) {
-            phoneNumbers.push(primaryPhone);
-            allContacts.push({
-              ...contact,
-              isRegistered: false,
-              userProfile: undefined,
-            });
+            // Check cache first
+            const cached = contactsCacheService.get(primaryPhone);
+
+            if (cached) {
+              // Use cached data
+              if (cached.userProfile?.id !== user?.id) {
+                allContacts.push({
+                  ...contact,
+                  isRegistered: cached.isRegistered,
+                  userProfile: cached.userProfile,
+                });
+              }
+            } else {
+              // Need to fetch from Firebase
+              allContacts.push({
+                ...contact,
+                isRegistered: false,
+                userProfile: undefined,
+              });
+              uncachedPhones.push(`+91${primaryPhone}`);
+            }
           }
         }
       });
 
-      if (phoneNumbers.length > 0) {
-        // Get registered users from Firebase
-        const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
+      console.log('[CreateGroup] Cached:', allContacts.filter(c => c.isRegistered).length, 'Uncached:', uncachedPhones.length);
+
+      // Fetch only uncached contacts from Firebase
+      if (uncachedPhones.length > 0) {
+        console.log('[CreateGroup] Fetching', uncachedPhones.length, 'uncached from Firebase');
+
+        const registeredUsers = await firebaseService.getUsersByPhoneNumbers(uncachedPhones);
+        console.log('[CreateGroup] Found', registeredUsers.length, 'registered users');
 
         const registeredPhones = new Set<string>();
         const userProfileMap: { [key: string]: any } = {};
 
-        // Process registered users
+        // Build cache entries
+        const cacheEntries: Array<{ phoneNumber: string; isRegistered: boolean; userProfile?: any }> = [];
+
         registeredUsers.forEach(userProfile => {
-          // Use your helper function on the backend number!
           const normalizedPhone = normalizePhoneNumber(userProfile.phoneNumber);
-
-          registeredPhones.add(normalizedPhone); // Now adds "10-digit"
-          userProfileMap[normalizedPhone] = userProfile; // Use the same normalized key for the map
+          registeredPhones.add(normalizedPhone);
+          userProfileMap[normalizedPhone] = userProfile;
+          cacheEntries.push({
+            phoneNumber: normalizedPhone,
+            isRegistered: true,
+            userProfile,
+          });
         });
 
-        // Update all contacts with registration status
-        const finalContacts = allContacts
-          .map(contact => {
-            const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-            const isRegistered = registeredPhones.has(primaryPhone);
-
-            // Skip current user
-            if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
-              return null;
-            }
-
-            return {
-              ...contact,
-              isRegistered,
-              userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
-            };
-          })
-          .filter(Boolean) as FilteredContact[];
-
-        // Sort: registered first, then unregistered
-        const sortedContacts = finalContacts.sort((a, b) => {
-          if (a.isRegistered && !b.isRegistered) return -1;
-          if (!a.isRegistered && b.isRegistered) return 1;
-          return 0;
-        });
-
-        setFilteredContacts(sortedContacts);
-      } else {
-        // No valid phone numbers, show all contacts
-        setFilteredContacts(allContacts);
-      }
-    } catch (error) {
-      // Show contacts without registration status as fallback
-      const basicContacts: FilteredContact[] = [];
-      contactsList.forEach(contact => {
-        if (contact.phoneNumbers?.length > 0) {
-          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          if (primaryPhone.length === 10) {
-            basicContacts.push({
-              ...contact,
+        // Mark unregistered numbers in cache
+        uncachedPhones.forEach(phone => {
+          const normalized = normalizePhoneNumber(phone);
+          if (!registeredPhones.has(normalized)) {
+            cacheEntries.push({
+              phoneNumber: normalized,
               isRegistered: false,
-              userProfile: undefined,
             });
           }
-        }
+        });
+
+        // Update cache in bulk
+        await contactsCacheService.setMultiple(cacheEntries);
+
+        // Update contacts with Firebase results
+        allContacts.forEach(contact => {
+          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+          if (registeredPhones.has(primaryPhone)) {
+            contact.isRegistered = true;
+            contact.userProfile = userProfileMap[primaryPhone];
+          }
+        });
+      }
+
+      // Filter out current user
+      const finalContacts = allContacts.filter(contact => {
+        const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+        const cached = contactsCacheService.get(primaryPhone);
+        return !cached?.userProfile || cached.userProfile.id !== user?.id;
       });
+
+      // Sort: registered first
+      const sortedContacts = finalContacts.sort((a, b) => {
+        if (a.isRegistered && !b.isRegistered) return -1;
+        if (!a.isRegistered && b.isRegistered) return 1;
+        return 0;
+      });
+
+      console.log('[CreateGroup] Final:', sortedContacts.length, 'contacts,', sortedContacts.filter(c => c.isRegistered).length, 'registered');
+      setFilteredContacts(sortedContacts);
+    } catch (error) {
+      console.error('[CreateGroup] Error processing contacts:', error);
+
+      // Fallback: show all contacts without registration status
+      const basicContacts: FilteredContact[] = contactsList
+        .filter(contact => contact.phoneNumbers?.length > 0)
+        .map(contact => ({
+          ...contact,
+          isRegistered: false,
+          userProfile: undefined,
+        }));
+
       setFilteredContacts(basicContacts);
     }
   };

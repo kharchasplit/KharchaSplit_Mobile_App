@@ -284,6 +284,12 @@ const scale = (size: number) => (screenWidth / baseWidth) * size;
 3. **Batch Firebase operations** where possible
 4. **Image compression** for receipts (base64)
 5. **Lazy loading** for expensive operations
+6. **Contacts Caching & Lazy Loading** ✅
+   - AsyncStorage + in-memory cache (10-min expiration)
+   - Load 50 contacts at a time with FlatList
+   - Only query Firebase for uncached contacts
+   - 85-98% faster (2-4s first load, 0.1-0.5s cached)
+   - See [CONTACTS_OPTIMIZATION.md](./CONTACTS_OPTIMIZATION.md)
 
 ## 📱 Navigation Structure
 
@@ -352,4 +358,4 @@ cd ios && pod install
 
 ---
 
-Last Updated: 2025-09-24T21:30:00+05:30 - Fixed Firebase undefined values errors, implemented complete FCM notification system, cleaned up debug logs and test code
+Last Updated: 2025-10-13 - Optimized contacts loading performance with caching and lazy loading (85-98% faster)

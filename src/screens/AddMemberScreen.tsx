@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   TextInput,
@@ -20,6 +20,7 @@ import { firebaseService } from '../services/firebaseService';
 import { useAuth } from '../context/AuthContext';
 import { Share } from 'react-native';
 import { s, vs, ms } from '../utils/deviceDimensions';
+import { contactsCacheService } from '../services/contactsCacheService';
 
 interface Group {
   id: string;
@@ -51,16 +52,30 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const [selectedMembers, setSelectedMembers] = useState<FilteredContact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<FilteredContact[]>([]);
+  const [displayedContacts, setDisplayedContacts] = useState<FilteredContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [hasContactsPermission, setHasContactsPermission] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const CONTACTS_PER_PAGE = 50;
 
   useEffect(() => {
     console.log('[AddMember] Screen mounted');
     console.log('[AddMember] Group prop:', JSON.stringify(group));
     console.log('[AddMember] Has contacts permission:', hasContactsPermission);
+
+    // Initialize cache and clear it (temporary - for debugging)
+    const initAndClearCache = async () => {
+      await contactsCacheService.init();
+      console.log('[AddMember] Cache stats before clear:', contactsCacheService.getStats());
+      // TEMPORARY: Clear cache to force fresh Firebase lookup
+      await contactsCacheService.clear();
+      console.log('[AddMember] Cache cleared - forcing fresh Firebase lookup');
+    };
+
+    initAndClearCache();
     requestContactsPermission();
   }, []);
 
@@ -120,7 +135,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
         emailAddresses: (contact.emailAddresses || []).map(email => ({ email: email.email })),
         thumbnailPath: contact.thumbnailPath,
       }));
-      setContacts(mappedContacts);
+
       await processContactsWithRegistration(mappedContacts);
     } catch (error) {
       Alert.alert('Error', 'Failed to load contacts');
@@ -131,8 +146,7 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const processContactsWithRegistration = async (contactsList: Contact[]) => {
     try {
-      console.log('[AddMember] Starting processContactsWithRegistration with', contactsList.length, 'contacts');
-      console.log('[AddMember] Group ID:', group.id);
+      console.log('[AddMember] Processing', contactsList.length, 'contacts with cache optimization');
 
       // Get current group members to exclude them
       const currentGroup = await firebaseService.getGroupById(group.id);
@@ -142,127 +156,213 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
         return;
       }
 
-      console.log('[AddMember] Current group members:', currentGroup.members.length);
-
       const existingMemberPhones = new Set(currentGroup.members.map(member =>
         normalizePhoneNumber(member.phoneNumber)
       ));
+      console.log('[AddMember] Existing members:', existingMemberPhones.size);
 
-      // Process all contacts first
-      const allContacts: FilteredContact[] = [];
-      const phoneNumbers: string[] = [];
+      // Process contacts and separate cached from uncached
+      const validContacts: FilteredContact[] = [];
+      const uncachedPhones: string[] = [];
       const processedContactIds = new Set<string>();
+      let invalidPhoneCount = 0;
+      let existingMemberCount = 0;
 
-      contactsList.forEach(contact => {
+      contactsList.forEach((contact, index) => {
         if (contact.phoneNumbers?.length > 0 && !processedContactIds.has(contact.recordID)) {
           processedContactIds.add(contact.recordID);
 
-          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+          const rawPhone = contact.phoneNumbers[0].number;
+          const primaryPhone = normalizePhoneNumber(rawPhone);
 
-          // Skip if contact is already a member or is current user
-          if (primaryPhone.length === 10 && !existingMemberPhones.has(primaryPhone)) {
-            // Format phone number with country code for Firebase query
-            const formattedPhone = `+91${primaryPhone}`;
-            phoneNumbers.push(formattedPhone);
-            allContacts.push({
-              ...contact,
-              isRegistered: false,
-              userProfile: undefined,
+          // Debug first 5 contacts
+          if (index < 5) {
+            console.log('[AddMember] Contact:', {
+              name: contact.displayName,
+              rawPhone,
+              normalized: primaryPhone,
+              length: primaryPhone.length,
+              isExistingMember: existingMemberPhones.has(primaryPhone),
             });
+          }
+
+          // Skip if already a member
+          if (existingMemberPhones.has(primaryPhone)) {
+            existingMemberCount++;
+          } else if (primaryPhone.length !== 10) {
+            invalidPhoneCount++;
+          } else {
+            // Check cache first
+            const cached = contactsCacheService.get(primaryPhone);
+
+            if (cached) {
+              // Use cached data
+              if (cached.userProfile?.id !== user?.id) {
+                validContacts.push({
+                  ...contact,
+                  isRegistered: cached.isRegistered,
+                  userProfile: cached.userProfile,
+                });
+              }
+            } else {
+              // Need to fetch from Firebase
+              validContacts.push({
+                ...contact,
+                isRegistered: false,
+                userProfile: undefined,
+              });
+              uncachedPhones.push(`+91${primaryPhone}`);
+            }
           }
         }
       });
 
-      if (phoneNumbers.length > 0) {
-        console.log('[AddMember] Querying Firebase for', phoneNumbers.length, 'phone numbers');
-        console.log('[AddMember] Sample phone numbers:', phoneNumbers.slice(0, 3));
+      console.log('[AddMember] Processing stats:', {
+        total: contactsList.length,
+        existingMembers: existingMemberCount,
+        invalidPhone: invalidPhoneCount,
+        valid: validContacts.length,
+        cached: validContacts.filter(c => c.isRegistered).length,
+        uncached: uncachedPhones.length,
+      });
 
-        // Get registered users from Firebase (with +91 format)
-        const registeredUsers = await firebaseService.getUsersByPhoneNumbers(phoneNumbers);
-        console.log('[AddMember] Found', registeredUsers.length, 'registered users');
+      // Fetch only uncached contacts from Firebase
+      if (uncachedPhones.length > 0) {
+        console.log('[AddMember] Fetching', uncachedPhones.length, 'uncached from Firebase');
+        console.log('[AddMember] Sample uncached phones (format +91XXXXXXXXXX):', uncachedPhones.slice(0, 5));
+
+        let registeredUsers = await firebaseService.getUsersByPhoneNumbers(uncachedPhones);
+        console.log('[AddMember] Found', registeredUsers.length, 'registered users with +91 format');
+
+        // If no results, try without +91 (just 10 digits)
+        if (registeredUsers.length === 0 && uncachedPhones.length > 0) {
+          console.log('[AddMember] Trying 10-digit format without +91...');
+          const phonesWithout91 = uncachedPhones.map(p => p.replace('+91', ''));
+          console.log('[AddMember] Sample 10-digit phones:', phonesWithout91.slice(0, 5));
+          registeredUsers = await firebaseService.getUsersByPhoneNumbers(phonesWithout91);
+          console.log('[AddMember] Found', registeredUsers.length, 'registered users with 10-digit format');
+        }
+
+        // If still no results, try with 91 prefix (no +)
+        if (registeredUsers.length === 0 && uncachedPhones.length > 0) {
+          console.log('[AddMember] Trying 91XXXXXXXXXX format (no +)...');
+          const phonesWith91NoPlus = uncachedPhones.map(p => p.replace('+', ''));
+          console.log('[AddMember] Sample 91XXXXXXXXXX phones:', phonesWith91NoPlus.slice(0, 5));
+          registeredUsers = await firebaseService.getUsersByPhoneNumbers(phonesWith91NoPlus);
+          console.log('[AddMember] Found', registeredUsers.length, 'registered users with 91XXXXXXXXXX format');
+        }
+
+        if (registeredUsers.length > 0) {
+          console.log('[AddMember] Sample registered:', registeredUsers.slice(0, 3).map(u => ({ phone: u.phoneNumber, name: u.name })));
+        } else {
+          console.warn('[AddMember] ⚠️ NO REGISTERED USERS FOUND! Check Firebase phone number format.');
+          console.warn('[AddMember] Expected one of: +91XXXXXXXXXX, XXXXXXXXXX, or 91XXXXXXXXXX');
+        }
 
         const registeredPhones = new Set<string>();
         const userProfileMap: { [key: string]: any } = {};
 
-        // Process registered users - map by normalized phone for easy lookup
+        // Build cache entries
+        const cacheEntries: Array<{ phoneNumber: string; isRegistered: boolean; userProfile?: any }> = [];
+
         registeredUsers.forEach(userProfile => {
           const normalizedPhone = normalizePhoneNumber(userProfile.phoneNumber);
           registeredPhones.add(normalizedPhone);
           userProfileMap[normalizedPhone] = userProfile;
+          cacheEntries.push({
+            phoneNumber: normalizedPhone,
+            isRegistered: true,
+            userProfile,
+          });
         });
 
-        // Update all contacts with registration status
-        const finalContacts = allContacts
-          .map(contact => {
-            const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-            const isRegistered = registeredPhones.has(primaryPhone);
-
-            // Skip current user
-            if (user && userProfileMap[primaryPhone] && userProfileMap[primaryPhone].id === user.id) {
-              return null;
-            }
-
-            return {
-              ...contact,
-              isRegistered,
-              userProfile: isRegistered ? userProfileMap[primaryPhone] : undefined,
-            };
-          })
-          .filter(Boolean) as FilteredContact[];
-
-        // Sort: registered first, then unregistered
-        const sortedContacts = finalContacts.sort((a, b) => {
-          if (a.isRegistered && !b.isRegistered) return -1;
-          if (!a.isRegistered && b.isRegistered) return 1;
-          return 0;
-        });
-
-        console.log('[AddMember] Setting', sortedContacts.length, 'filtered contacts');
-        console.log('[AddMember] Registered contacts:', sortedContacts.filter(c => c.isRegistered).length);
-        setFilteredContacts(sortedContacts);
-      } else {
-        console.log('[AddMember] No valid phone numbers found, setting', allContacts.length, 'contacts');
-        // No valid phone numbers, show all contacts
-        setFilteredContacts(allContacts);
-      }
-    } catch (error) {
-      console.error('[AddMember] Error processing contacts with registration:', error);
-      // Show contacts without registration status as fallback
-      const basicContacts: FilteredContact[] = [];
-      contactsList.forEach(contact => {
-        if (contact.phoneNumbers?.length > 0) {
-          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
-          if (primaryPhone.length === 10) {
-            basicContacts.push({
-              ...contact,
+        // Mark unregistered numbers in cache
+        uncachedPhones.forEach(phone => {
+          const normalized = normalizePhoneNumber(phone);
+          if (!registeredPhones.has(normalized)) {
+            cacheEntries.push({
+              phoneNumber: normalized,
               isRegistered: false,
-              userProfile: undefined,
             });
           }
-        }
+        });
+
+        // Update cache in bulk
+        await contactsCacheService.setMultiple(cacheEntries);
+
+        // Update contacts with Firebase results
+        let updatedCount = 0;
+        validContacts.forEach(contact => {
+          const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+          if (registeredPhones.has(primaryPhone)) {
+            contact.isRegistered = true;
+            contact.userProfile = userProfileMap[primaryPhone];
+            updatedCount++;
+          }
+        });
+        console.log('[AddMember] Updated', updatedCount, 'contacts with registration status');
+      }
+
+      // Filter out current user
+      const finalContacts = validContacts.filter(contact => {
+        const primaryPhone = normalizePhoneNumber(contact.phoneNumbers[0].number);
+        const cached = contactsCacheService.get(primaryPhone);
+        return !cached?.userProfile || cached.userProfile.id !== user?.id;
       });
+
+      // Sort: registered first
+      const sortedContacts = finalContacts.sort((a, b) => {
+        if (a.isRegistered && !b.isRegistered) return -1;
+        if (!a.isRegistered && b.isRegistered) return 1;
+        return 0;
+      });
+
+      console.log('[AddMember] Final:', sortedContacts.length, 'contacts,', sortedContacts.filter(c => c.isRegistered).length, 'registered');
+      setFilteredContacts(sortedContacts);
+
+      // Load first page
+      loadMoreContacts(sortedContacts, 0);
+    } catch (error) {
+      console.error('[AddMember] Error processing contacts:', error);
+
+      // Fallback: show all contacts without registration status
+      const basicContacts: FilteredContact[] = contactsList
+        .filter(contact => contact.phoneNumbers?.length > 0)
+        .map(contact => ({
+          ...contact,
+          isRegistered: false,
+          userProfile: undefined,
+        }));
+
       setFilteredContacts(basicContacts);
+      loadMoreContacts(basicContacts, 0);
     }
   };
 
-  const formatPhoneNumber = (phoneNumber: string): string => {
-    // Remove all non-digit characters
-    const cleaned = phoneNumber.replace(/\D/g, '');
+  const loadMoreContacts = (contacts: FilteredContact[], startIndex: number) => {
+    const endIndex = Math.min(startIndex + CONTACTS_PER_PAGE, contacts.length);
+    const newContacts = contacts.slice(startIndex, endIndex);
 
-    // If number starts with country code, keep it as is
-    // If it's 10 digits, add +91 for India
-    if (cleaned.length === 10) {
-      return `+91${cleaned}`;
-    } else if (cleaned.length > 10 && cleaned.startsWith('91')) {
-      return `+${cleaned}`;
-    } else if (cleaned.length > 10) {
-      return `+${cleaned}`;
+    if (startIndex === 0) {
+      setDisplayedContacts(newContacts);
+    } else {
+      setDisplayedContacts(prev => [...prev, ...newContacts]);
     }
 
-    return cleaned;
+    setHasMore(endIndex < contacts.length);
+    setLoadingMore(false);
   };
 
-  const handleSelectMember = (contact: FilteredContact) => {
+  const handleLoadMore = () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    setTimeout(() => {
+      loadMoreContacts(searchFilteredContacts, displayedContacts.length);
+    }, 100);
+  };
+
+  const handleSelectMember = useCallback((contact: FilteredContact) => {
     // Only allow adding registered members to group
     if (!contact.isRegistered) {
       return;
@@ -274,9 +374,9 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
     } else {
       setSelectedMembers(prev => [...prev, contact]);
     }
-  };
+  }, [selectedMembers]);
 
-  const handleInviteContact = async (contact: FilteredContact) => {
+  const handleInviteContact = async (_contact: FilteredContact) => {
     try {
       if (!user?.referralCode) {
         Alert.alert('Error', 'Unable to send invite. Please try again later.');
@@ -423,13 +523,42 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
-  const searchFilteredContacts = filteredContacts.filter(contact => {
-    const name = (contact.userProfile?.name || contact.displayName).toLowerCase();
-    const phone = contact.phoneNumbers?.[0]?.number || '';
-    const query = searchQuery.toLowerCase();
+  // Update displayed contacts when filteredContacts is set (only once)
+  const hasLoadedContacts = useRef(false);
 
-    return name.includes(query) || phone.includes(query);
-  });
+  useEffect(() => {
+    if (filteredContacts.length > 0 && !hasLoadedContacts.current) {
+      console.log('[AddMember] Loading first page of', filteredContacts.length, 'contacts');
+      loadMoreContacts(filteredContacts, 0);
+      hasLoadedContacts.current = true;
+    }
+  }, [filteredContacts]);
+
+  // Handle search separately to avoid flickering
+  useEffect(() => {
+    if (!hasLoadedContacts.current) return; // Wait for initial load
+
+    if (searchQuery.trim()) {
+      // When searching, show all matching results (no pagination)
+      const filtered = filteredContacts.filter(contact => {
+        const name = (contact.userProfile?.name || contact.displayName).toLowerCase();
+        const phone = contact.phoneNumbers?.[0]?.number || '';
+        const query = searchQuery.toLowerCase();
+        return name.includes(query) || phone.includes(query);
+      });
+      console.log('[AddMember] Search results:', filtered.length, 'of', filteredContacts.length);
+      setDisplayedContacts(filtered);
+      setHasMore(false);
+    } else if (filteredContacts.length > 0) {
+      // When clearing search, reload first page
+      loadMoreContacts(filteredContacts, 0);
+    }
+  }, [searchQuery]);
+
+  // Memoize the styles to prevent recreation on every render
+  const flatListStyles = useMemo(() => styles(colors), [colors]);
+
+  const searchFilteredContacts = displayedContacts;
 
   return (
     <SafeAreaView style={styles(colors).container}>
@@ -442,111 +571,146 @@ export const AddMemberScreen: React.FC<Props> = ({ route, navigation }) => {
         <View style={styles(colors).placeholder} />
       </View>
 
-      <ScrollView style={styles(colors).scrollView}>
-        {/* Group Info */}
-        <View style={styles(colors).groupInfo}>
-          <Text style={styles(colors).groupName}>{group?.name}</Text>
-          <Text style={styles(colors).groupDescription}>Add new members to this group</Text>
-        </View>
+      <FlatList
+        style={styles(colors).scrollView}
+        ListHeaderComponent={
+          <>
+            {/* Group Info */}
+            <View style={styles(colors).groupInfo}>
+              <Text style={styles(colors).groupName}>{group?.name}</Text>
+              <Text style={styles(colors).groupDescription}>Add new members to this group</Text>
+            </View>
 
-        {/* Search Bar */}
-        <View style={styles(colors).searchContainer}>
-          <Ionicons name="search" size={20} color={colors.secondaryText} />
-          <TextInput
-            style={styles(colors).searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search Person or Phone Number"
-            placeholderTextColor={colors.inputPlaceholder}
-          />
-        </View>
+            {/* Search Bar */}
+            <View style={styles(colors).searchContainer}>
+              <Ionicons name="search" size={20} color={colors.secondaryText} />
+              <TextInput
+                style={styles(colors).searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search Person or Phone Number"
+                placeholderTextColor={colors.inputPlaceholder}
+              />
+            </View>
 
-        {/* Contacts */}
-        {contactsLoading ? (
-          <View style={styles(colors).loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primaryButton} />
-            <Text style={styles(colors).loadingText}>Loading contacts...</Text>
-          </View>
-        ) : searchFilteredContacts.length === 0 ? (
-          <View style={styles(colors).emptyContainer}>
-            <Ionicons name="people-outline" size={64} color={colors.secondaryText} />
-            <Text style={styles(colors).emptyTitle}>No contacts found</Text>
-            <Text style={styles(colors).emptyDescription}>
-              {searchQuery ? 'Try adjusting your search terms.' : 'Allow contacts permission to see your friends.'}
-            </Text>
-          </View>
-        ) : (
-          searchFilteredContacts.map(contact => {
-            const isSelected = selectedMembers.find(m => m.recordID === contact.recordID);
-            const phoneNumber = contact.phoneNumbers?.[0]?.number || 'No phone number';
-            const displayName = contact.userProfile?.name || contact.displayName;
+            {/* Loading State */}
+            {contactsLoading && (
+              <View style={styles(colors).loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primaryButton} />
+                <Text style={styles(colors).loadingText}>Loading contacts...</Text>
+              </View>
+            )}
+          </>
+        }
+        data={contactsLoading ? [] : searchFilteredContacts}
+        keyExtractor={(item) => item.recordID}
+        renderItem={({ item: contact }) => {
+          const isSelected = selectedMembers.find(m => m.recordID === contact.recordID);
+          const phoneNumber = contact.phoneNumbers?.[0]?.number || 'No phone number';
+          const displayName = contact.userProfile?.name || contact.displayName;
+          const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-            return (
-              <View key={contact.recordID} style={styles(colors).contactItem}>
-                <View style={styles(colors).contactInfo}>
-                  {contact.thumbnailPath ? (
-                    <Image source={{ uri: contact.thumbnailPath }} style={styles(colors).contactImage} />
-                  ) : (
-                    <View style={styles(colors).contactImagePlaceholder}>
-                      <Text style={styles(colors).contactImagePlaceholderText}>
-                        {displayName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+          // Debug log for first 5 contacts to check registration status
+          if (searchFilteredContacts.indexOf(contact) < 5) {
+            console.log(`[AddMember] Contact render:`, {
+              name: displayName,
+              phone: normalizedPhone,
+              isRegistered: contact.isRegistered,
+              hasProfile: !!contact.userProfile,
+            });
+          }
 
-                  <View style={styles(colors).contactDetails}>
-                    <Text style={styles(colors).contactName}>
-                      {displayName}
+          return (
+            <View style={styles(colors).contactItem}>
+              <View style={styles(colors).contactInfo}>
+                {contact.thumbnailPath ? (
+                  <Image source={{ uri: contact.thumbnailPath }} style={styles(colors).contactImage} />
+                ) : (
+                  <View style={styles(colors).contactImagePlaceholder}>
+                    <Text style={styles(colors).contactImagePlaceholderText}>
+                      {displayName.charAt(0).toUpperCase()}
                     </Text>
-                    <Text style={styles(colors).contactPhone}>
-                      {phoneNumber}
-                    </Text>
-                    {contact.isRegistered && (
-                      <View style={styles(colors).registeredBadge}>
-                        <Ionicons name="checkmark-circle" size={14} color={colors.primaryButton} />
-                        <Text style={styles(colors).registeredText}>Registered</Text>
-                      </View>
-                    )}
                   </View>
-                </View>
+                )}
 
-                <View style={styles(colors).contactActions}>
-                  {contact.isRegistered ? (
-                    // Registered user - show Add/Remove button
-                    <TouchableOpacity
-                      style={[
-                        styles(colors).actionButton,
-                        isSelected ? styles(colors).removeButton : styles(colors).addButton
-                      ]}
-                      onPress={() => handleSelectMember(contact)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name={isSelected ? "checkmark" : "add"}
-                        size={16}
-                        color="white"
-                      />
-                      <Text style={styles(colors).actionButtonText}>
-                        {isSelected ? 'Added' : 'Add'}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    // Unregistered user - show Invite button
-                    <TouchableOpacity
-                      style={[styles(colors).actionButton, styles(colors).inviteButton]}
-                      onPress={() => handleInviteContact(contact)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="share-outline" size={16} color="white" />
-                      <Text style={styles(colors).actionButtonText}>Invite</Text>
-                    </TouchableOpacity>
+                <View style={styles(colors).contactDetails}>
+                  <Text style={styles(colors).contactName}>
+                    {displayName}
+                  </Text>
+                  <Text style={styles(colors).contactPhone}>
+                    {phoneNumber}
+                  </Text>
+                  {contact.isRegistered && (
+                    <View style={styles(colors).registeredBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={colors.primaryButton} />
+                      <Text style={styles(colors).registeredText}>Registered</Text>
+                    </View>
                   )}
                 </View>
               </View>
-            );
-          })
-        )}
-      </ScrollView>
+
+              <View style={styles(colors).contactActions}>
+                {contact.isRegistered ? (
+                  <TouchableOpacity
+                    style={[
+                      styles(colors).actionButton,
+                      isSelected ? styles(colors).removeButton : styles(colors).addButton
+                    ]}
+                    onPress={() => handleSelectMember(contact)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={isSelected ? "checkmark" : "add"}
+                      size={16}
+                      color="white"
+                    />
+                    <Text style={styles(colors).actionButtonText}>
+                      {isSelected ? 'Added' : 'Add'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles(colors).actionButton, styles(colors).inviteButton]}
+                    onPress={() => handleInviteContact(contact)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="share-outline" size={16} color="white" />
+                    <Text style={styles(colors).actionButtonText}>Invite</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        }}
+        ListEmptyComponent={
+          !contactsLoading ? (
+            <View style={styles(colors).emptyContainer}>
+              <Ionicons name="people-outline" size={64} color={colors.secondaryText} />
+              <Text style={styles(colors).emptyTitle}>No contacts found</Text>
+              <Text style={styles(colors).emptyDescription}>
+                {searchQuery ? 'Try adjusting your search terms.' : 'Allow contacts permission to see your friends.'}
+              </Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles(colors).loadingMore}>
+              <ActivityIndicator size="small" color={colors.primaryButton} />
+              <Text style={styles(colors).loadingMoreText}>Loading more...</Text>
+            </View>
+          ) : !searchQuery && hasMore && searchFilteredContacts.length > 0 ? (
+            <TouchableOpacity
+              style={styles(colors).loadMoreButton}
+              onPress={handleLoadMore}
+            >
+              <Text style={styles(colors).loadMoreText}>Load More</Text>
+            </TouchableOpacity>
+          ) : null
+        }
+        onEndReached={!searchQuery && hasMore ? handleLoadMore : undefined}
+        onEndReachedThreshold={0.5}
+      />
 
       {/* Add Button */}
       {selectedMembers.length > 0 && (
@@ -753,5 +917,31 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       color: colors.primaryButtonText,
       fontWeight: '600',
       fontSize: 16,
+    },
+    loadingMore: {
+      paddingVertical: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    loadingMoreText: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginTop: 8,
+    },
+    loadMoreButton: {
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      backgroundColor: colors.cardBackground,
+      marginHorizontal: 16,
+      marginVertical: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.primaryButton,
+    },
+    loadMoreText: {
+      fontSize: 14,
+      color: colors.primaryButton,
+      fontWeight: '600',
     },
   });
