@@ -487,7 +487,13 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
   };
   
   const handleSetSplitType = (type: string) => {
-    // ... (unchanged)
+    // Validate that amount is entered first
+    if (!amount || parseFloat(amount) <= 0) {
+      setShowSplitModal(false);
+      Alert.alert("Amount Required", "Please enter the amount first before selecting split type.");
+      return;
+    }
+
     setSplitType(type);
     setShowSplitModal(false);
   };
@@ -643,7 +649,16 @@ export const AddExpenseScreen: React.FC<AddExpenseScreenProps> = ({ route, navig
             </View>
             <Ionicons name="chevron-down" size={scaledFontSize.lg} style={styles.dropdownIcon} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowButton} onPress={() => setShowSplitModal(true)}>
+          <TouchableOpacity
+            style={styles.rowButton}
+            onPress={() => {
+              if (!amount || parseFloat(amount) <= 0) {
+                Alert.alert("Amount Required", "Please enter the amount first before selecting split type.");
+                return;
+              }
+              setShowSplitModal(true);
+            }}
+          >
             <View>
               <Text style={styles.rowButtonLabel}>Split</Text>
               <Text style={styles.rowButtonValue}>{splitType}</Text>

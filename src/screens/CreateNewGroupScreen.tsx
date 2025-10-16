@@ -536,6 +536,12 @@ export const CreateNewGroupScreen: React.FC<CreateNewGroupScreenProps> = ({ onCl
       return;
     }
 
+    // Validate that at least one member is added
+    if (selectedMembers.length === 0) {
+      Alert.alert('Members Required', 'Please add at least one member to the group');
+      return;
+    }
+
     try {
       setLoading(true);
 

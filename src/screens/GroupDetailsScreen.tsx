@@ -337,9 +337,11 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const handleExpensePress = (expense: GroupExpense) => {
     // Navigate to ExpenseDetailScreen for better user experience
-    navigation.navigate('ExpenseDetail', { 
-      expense, 
-      group 
+    // Remove base64 data to avoid navigation param size limits
+    const { coverImageBase64, ...groupWithoutBase64 } = group;
+    navigation.navigate('ExpenseDetail', {
+      expense,
+      group: groupWithoutBase64
     });
   };
 
@@ -519,7 +521,13 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
             <Ionicons name="arrow-back" size={scaledFontSize.xl} color={colors.primaryText} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{group.name}</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('ManageGroup', { group })}>
+          <TouchableOpacity
+            onPress={() => {
+              // Remove base64 data to avoid navigation param size limits
+              const { coverImageBase64, ...groupWithoutBase64 } = group;
+              navigation.navigate('ManageGroup', { group: groupWithoutBase64 });
+            }}
+          >
             <Ionicons name="settings-outline" size={scaledFontSize.xl} color={colors.primaryText} />
           </TouchableOpacity>
         </View>
@@ -541,7 +549,13 @@ export const GroupDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
           <TouchableOpacity onPress={() => loadGroupData()}>
             <Ionicons name="refresh-outline" size={scaledFontSize.xl} color={colors.primaryText} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('ManageGroup', { group })}>
+          <TouchableOpacity
+            onPress={() => {
+              // Remove base64 data to avoid navigation param size limits
+              const { coverImageBase64, ...groupWithoutBase64 } = group;
+              navigation.navigate('ManageGroup', { group: groupWithoutBase64 });
+            }}
+          >
             <Ionicons name="settings-outline" size={scaledFontSize.xl} color={colors.primaryText} />
           </TouchableOpacity>
         </View>

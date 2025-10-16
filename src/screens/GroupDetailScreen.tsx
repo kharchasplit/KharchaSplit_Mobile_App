@@ -168,12 +168,14 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
           ...updatedGroup,
           coverImageBase64: updatedGroup.coverImageBase64
         };
-        
+
         // Update the local group state to reflect fresh data
         setCurrentGroup(updatedGroupData);
-        
+
         // Update the group object in parent navigation params for consistency
-        navigation.setParams({ group: updatedGroupData });
+        // Remove base64 data to avoid navigation param size limits
+        const { coverImageBase64, ...groupWithoutBase64 } = updatedGroupData;
+        navigation.setParams({ group: groupWithoutBase64 });
         
         const members = updatedGroup.members.map(member => ({
           userId: member.userId,
@@ -277,11 +279,15 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
 
   // Handlers for group options
   const handleAddMember = useCallback(() => {
-    navigation.navigate('AddMember', {group: currentGroup});
+    // Remove base64 data to avoid navigation param size limits
+    const { coverImageBase64, ...groupWithoutBase64 } = currentGroup;
+    navigation.navigate('AddMember', {group: groupWithoutBase64});
   }, [navigation, currentGroup]);
 
   const handleManageGroup = useCallback(() => {
-    navigation.navigate('ManageGroup', {group: currentGroup});
+    // Remove base64 data to avoid navigation param size limits
+    const { coverImageBase64, ...groupWithoutBase64 } = currentGroup;
+    navigation.navigate('ManageGroup', {group: groupWithoutBase64});
   }, [navigation, currentGroup]);
 
   const handleCompleteGroup = useCallback(async () => {
@@ -779,15 +785,18 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
                 <TouchableOpacity
                   key={expense.id}
                   style={styles.expenseItem}
-                  onPress={() =>
+                  onPress={() => {
+                    // Remove base64 data to avoid navigation param size limits
+                    const { coverImageBase64, ...groupWithoutBase64 } = currentGroup;
                     navigation.navigate('ExpenseDetail', {
                       expense,
                       group: {
-                        ...group,
+                        ...groupWithoutBase64,
                         members: groupMembers
                       }
-                    })
-                  }>
+                    });
+                  }}
+                >
                   <View
                     style={[styles.expenseIcon, {backgroundColor: category.color}]}>
                     <Text style={styles.expenseIconText}>{category.emoji}</Text>
@@ -1254,7 +1263,14 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         <View style={styles.tabContentContainer}>{renderTabContent()}</View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('AddExpense', {group: currentGroup, onReturn: loadGroupData})}>
+      <TouchableOpacity
+        style={styles.floatingButton}
+        onPress={() => {
+          // Remove base64 data to avoid navigation param size limits
+          const { coverImageBase64, ...groupWithoutBase64 } = currentGroup;
+          navigation.navigate('AddExpense', {group: groupWithoutBase64, onReturn: loadGroupData});
+        }}
+      >
         <Ionicons name="add" size={scale(28)} color="#FFFFFF" />
       </TouchableOpacity>
 
@@ -1279,7 +1295,15 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
             {/* Handle for Bottom Sheet */}
             <View style={styles.modalHandle} />
 
-            <TouchableOpacity style={styles.optionItem} onPress={() => { setShowGroupOptions(false); navigation.navigate('GroupDetails', { group: currentGroup }); }}>
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowGroupOptions(false);
+                // Remove base64 data to avoid navigation param size limits
+                const { coverImageBase64, ...groupWithoutBase64 } = currentGroup;
+                navigation.navigate('GroupDetails', { group: groupWithoutBase64 });
+              }}
+            >
               <MaterialIcons name="info" size={scale(20)} color={colors.secondaryText} style={styles.optionIconStyle} />
               <Text style={styles.optionText}>Group Details</Text>
             </TouchableOpacity>

@@ -9,14 +9,38 @@ import { AuthenticatedNavigator } from './src/navigation/AuthenticatedNavigator'
 import { UnauthenticatedNavigator } from './src/navigation/AppNavigator';
 import { BiometricAuthScreen } from './src/screens/BiometricAuthScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { UpdatePromptModal } from './src/components/UpdatePromptModal';
 import messaging from '@react-native-firebase/messaging';
 import { FCMService } from './src/services/FCMService';
+import versionCheckService, { UpdateCheckResult } from './src/services/versionCheckService';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { isBiometricLocked, setBiometricLocked } = useBiometric();
   const { colors } = useTheme();
   const [showSplash, setShowSplash] = useState(true);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // Check for app updates
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      try {
+        // Check for updates after splash screen
+        if (!showSplash) {
+          const result = await versionCheckService.checkForUpdate();
+          if (result && result.updateAvailable) {
+            setUpdateInfo(result);
+            setShowUpdateModal(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for updates:', error);
+      }
+    };
+
+    checkForUpdates();
+  }, [showSplash]);
 
   // Initialize FCM when user is authenticated (non-blocking)
   useEffect(() => {
@@ -46,6 +70,18 @@ const AppContent: React.FC = () => {
       initializeFCM();
     }
   }, [isAuthenticated, user]);
+
+  // Handle update button press
+  const handleUpdate = async () => {
+    if (updateInfo?.storeUrl) {
+      await versionCheckService.openStore(updateInfo.storeUrl);
+    }
+  };
+
+  // Handle "Maybe Later" button press
+  const handleLater = () => {
+    setShowUpdateModal(false);
+  };
 
   // Show splash screen first (colors are now guaranteed to be available)
   if (showSplash) {
@@ -77,9 +113,24 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <NavigationContainer>
-      {isAuthenticated ? <AuthenticatedNavigator /> : <UnauthenticatedNavigator />}
-    </NavigationContainer>
+    <>
+      <NavigationContainer>
+        {isAuthenticated ? <AuthenticatedNavigator /> : <UnauthenticatedNavigator />}
+      </NavigationContainer>
+
+      {/* Update Prompt Modal */}
+      {updateInfo && (
+        <UpdatePromptModal
+          visible={showUpdateModal}
+          forceUpdate={updateInfo.forceUpdate}
+          currentVersion={updateInfo.currentVersion}
+          latestVersion={updateInfo.latestVersion}
+          updateMessage={updateInfo.updateMessage}
+          onUpdate={handleUpdate}
+          onLater={updateInfo.forceUpdate ? undefined : handleLater}
+        />
+      )}
+    </>
   );
 };
 
