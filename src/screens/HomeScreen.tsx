@@ -1,0 +1,1007 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  StatusBar,
+  Animated,
+  Alert,
+  // --- RESPONSIVE ---
+  useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CreateNewGroupScreen } from './CreateNewGroupScreen';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { firebaseService } from '../services/firebaseService';
+// --- RESPONSIVE ---
+// We now use this object to create scaled sizes
+import { typography } from '../utils/typography';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { ensureDataUri } from '../utils/imageUtils';
+import { FCMTokenManager } from '../services/fcmTokenManager';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HomeScreenSkeleton } from '../components/SkeletonLoader';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+// (Interfaces remain the same)
+interface GroupDetail {
+  text: string;
+  amount: number;
+  type: 'owe' | 'owed';
+}
+
+interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  avatar?: string | null;
+  coverImageUrl?: string | null;
+  youOwe: number;
+  youAreOwed: number;
+  details: GroupDetail[];
+  moreBalances?: number | null;
+  members?: any[];
+  createdAt?: any;
+  totalExpenses?: number;
+}
+
+interface OverallBalance {
+  netBalance: number;
+  totalYouOwe: number;
+  totalYouAreOwed: number;
+  groupBalanceDetails: any[];
+}
+
+interface HomeScreenProps {
+  navigation: any;
+}
+
+// Helper function to calculate user's balance in a specific group
+const calculateUserGroupBalance = (expenses: any[], userId: string, members: any[]) => {
+  let netBalance = 0;
+  const details: GroupDetail[] = [];
+  const memberBalances: { [key: string]: number } = {};
+
+  // Initialize member balances
+  members.forEach(member => {
+    memberBalances[member.userId] = 0;
+  });
+
+  // Process each expense
+  expenses.forEach(expense => {
+    const payerId = expense.paidBy.id;
+    
+    expense.participants.forEach((participant: any) => {
+      const participantId = participant.id || participant.userId;
+      
+      if (participantId !== payerId) {
+        // Participant owes payer
+        memberBalances[participantId] -= participant.amount;
+        memberBalances[payerId] += participant.amount;
+      }
+    });
+  });
+
+  // Calculate net balance for current user
+  netBalance = memberBalances[userId] || 0;
+
+  // Generate balance details for current user
+  members.forEach(member => {
+    if (member.userId !== userId) {
+      const memberBalance = memberBalances[member.userId] || 0;
+      const userBalance = memberBalances[userId] || 0;
+      
+      // If user owes this member
+      if (userBalance < 0 && memberBalance > 0) {
+        const amount = Math.min(Math.abs(userBalance), memberBalance);
+        if (amount > 0.01) {
+          details.push({
+            text: `you owe ${member.name}`,
+            amount: amount,
+            type: 'owe'
+          });
+        }
+      }
+      
+      // If this member owes user
+      if (userBalance > 0 && memberBalance < 0) {
+        const amount = Math.min(userBalance, Math.abs(memberBalance));
+        if (amount > 0.01) {
+          details.push({
+            text: `${member.name} owes you`,
+            amount: amount,
+            type: 'owed'
+          });
+        }
+      }
+    }
+  });
+
+  return { netBalance, details };
+};
+
+
+export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+  // --- STATUS BAR FIX ---
+  // Assuming your theme context provides an isDarkMode boolean
+  // If it provides a string like `mode`, you can do:
+  // const { colors, mode } = useTheme();
+  // const isDarkMode = mode === 'dark';
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+
+  // Animation for content fade in
+  const contentFadeAnim = useRef(new Animated.Value(0)).current;
+  // --- END FIX ---
+
+  // --- RESPONSIVE ---
+  // Get screen width
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Define base width and scaling function
+  const baseWidth = 375;
+  const scale = (size: number) => (screenWidth / baseWidth) * size;
+
+  // Calculate safe bottom padding for content
+  const getContentBottomPadding = () => {
+    // Base tab bar height + safe area bottom + extra padding
+    const baseTabBarHeight = 64;
+    const safeTabBarSpace = baseTabBarHeight + insets.bottom + scale(20);
+    return safeTabBarSpace;
+  };
+
+  // Create an object of scaled font sizes using the imported typography file
+  const scaledFontSize = {
+    lg: scale(typography.fontSize.lg),
+    '2xl': scale(typography.fontSize['2xl']),
+    headerLarge: scale(typography.text.headerLarge.fontSize),
+    header: scale(typography.text.header.fontSize),
+    title: scale(typography.text.title.fontSize),
+    subtitle: scale(typography.text.subtitle.fontSize),
+    body: scale(typography.text.body.fontSize),
+    caption: scale(typography.text.caption.fontSize),
+  };
+  // --- END RESPONSIVE ---
+
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [overallBalance, setOverallBalance] = useState<OverallBalance>({
+    netBalance: 0,
+    totalYouOwe: 0,
+    totalYouAreOwed: 0,
+    groupBalanceDetails: [],
+  });
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [personalExpensesSummary, setPersonalExpensesSummary] = useState({
+    totalExpenses: 0,
+    expenseCount: 0,
+  });
+
+  const loadGroupsFromFirebase = async () => {
+    if (!user) {
+      // Set initial loading to false even when no user
+      if (initialLoading) {
+        setInitialLoading(false);
+        Animated.timing(contentFadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
+      return;
+    }
+
+    try {
+      setGroupsLoading(true);
+      
+      const userGroups = await firebaseService.getUserGroups(user.id);
+      
+      // Calculate balances for each group - OPTIMIZED: Load in batches
+      const convertedGroups: Group[] = userGroups.map((group) => {
+        // Return group with placeholder balances - will be calculated on-demand
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          avatar: group.coverImageBase64 ? null : '🎭',
+          coverImageUrl: group.coverImageBase64 || null,
+          youOwe: 0, // Will be updated later if needed
+          youAreOwed: 0, // Will be updated later if needed
+          details: [], // Will be calculated when user opens group
+          moreBalances: 0,
+          members: group.members,
+          createdAt: group.createdAt,
+          totalExpenses: group.totalExpenses || 0,
+        };
+      });
+
+      // Load expenses for all groups in parallel (non-blocking)
+      // This happens in background and updates UI incrementally
+      loadGroupBalancesInBackground(userGroups);
+      
+      setGroups(convertedGroups);
+      
+      // Calculate overall balance
+      calculateOverallBalance(convertedGroups);
+    } catch (error: any) {
+      
+      // Show user-friendly error message for specific cases
+      if (error.message.includes('index required')) {
+        // For now, keep existing groups and don't show error to user
+      } else if (error.message.includes('permission denied')) {
+        // Permission denied - check Firebase rules
+      }
+      
+      // Keep existing groups on error - don't clear the state
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  // Background loading of group balances (non-blocking)
+  const loadGroupBalancesInBackground = async (userGroups: any[]) => {
+    if (!user) return;
+
+    try {
+      // Load expenses for all groups in parallel
+      const balancePromises = userGroups.map(async (group, index) => {
+        try {
+          const groupExpenses = await firebaseService.getGroupExpenses(group.id);
+          const balance = calculateUserGroupBalance(groupExpenses, user.id, group.members);
+
+          // Update the specific group in the state
+          setGroups(prevGroups => {
+            const updatedGroups = [...prevGroups];
+            if (updatedGroups[index]) {
+              updatedGroups[index] = {
+                ...updatedGroups[index],
+                youOwe: Math.max(0, -balance.netBalance),
+                youAreOwed: Math.max(0, balance.netBalance),
+                details: balance.details,
+                moreBalances: balance.details.length > 3 ? balance.details.length - 3 : 0,
+              };
+            }
+            return updatedGroups;
+          });
+
+          return balance;
+        } catch (error) {
+          return null;
+        }
+      });
+
+      // Wait for all balances to load
+      await Promise.all(balancePromises);
+
+      // Recalculate overall balance after all groups are loaded
+      setGroups(prevGroups => {
+        calculateOverallBalance(prevGroups);
+        return prevGroups;
+      });
+    } catch (error) {
+      console.error('Error loading group balances:', error);
+    }
+  };
+
+  const calculateOverallBalance = (groups: Group[]) => {
+    let totalYouOwe = 0;
+    let totalYouAreOwed = 0;
+    const groupBalanceDetails: any[] = [];
+
+    groups.forEach(group => {
+      totalYouOwe += group.youOwe;
+      totalYouAreOwed += group.youAreOwed;
+      
+      // Add group balance details
+      if (group.youOwe > 0 || group.youAreOwed > 0) {
+        groupBalanceDetails.push({
+          groupName: group.name,
+          groupId: group.id,
+          youOwe: group.youOwe,
+          youAreOwed: group.youAreOwed,
+          netBalance: group.youAreOwed - group.youOwe,
+          details: group.details
+        });
+      }
+    });
+
+    const netBalance = totalYouAreOwed - totalYouOwe;
+
+    setOverallBalance({
+      netBalance,
+      totalYouOwe,
+      totalYouAreOwed,
+      groupBalanceDetails
+    });
+  };
+
+  const loadPersonalExpensesSummary = async () => {
+    if (!user?.id) return;
+
+    try {
+      const summary = await firebaseService.getPersonalExpensesSummary(user.id);
+      setPersonalExpensesSummary({
+        totalExpenses: summary.totalExpenses,
+        expenseCount: summary.expenseCount,
+      });
+    } catch (error) {
+      // Silently handle errors
+    }
+  };
+
+  const loadGroupsAndBalance = async () => {
+    setBalanceLoading(true);
+
+    // Load groups from Firebase (now optimized - no longer waits for all expenses)
+    const dataPromise = loadGroupsFromFirebase();
+
+    // Load personal expenses summary in parallel
+    const personalExpensesPromise = loadPersonalExpensesSummary();
+
+    // Wait for both to complete
+    await Promise.all([dataPromise, personalExpensesPromise]);
+
+    setBalanceLoading(false);
+
+    // Set initial loading to false after first load and animate content in
+    if (initialLoading) {
+      setInitialLoading(false);
+      // Fade in content after skeleton disappears
+      Animated.timing(contentFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  useEffect(() => {
+    // Only load data if user is available
+    if (user?.id) {
+      loadGroupsAndBalance();
+    } else {
+      // If no user, still show skeleton briefly then show empty state
+      setTimeout(() => {
+        if (initialLoading) {
+          setInitialLoading(false);
+          Animated.timing(contentFadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        }
+      }, 1000);
+    }
+    
+    // Auto-refresh FCM token if user doesn't have one
+    const autoRefreshFCMToken = async () => {
+      if (!user?.id) return;
+      
+      try {
+        // Check if user has FCM token in Firebase
+        const hasToken = await FCMTokenManager.checkUserToken(user.id);
+        
+        if (!hasToken) {
+          await FCMTokenManager.getAndSaveToken(user.id);
+        }
+      } catch (error) {
+        // Silently handle FCM token initialization errors
+      }
+    };
+    
+    // Delay token refresh to not interfere with screen loading
+    setTimeout(autoRefreshFCMToken, 2000);
+  }, [user?.id]);
+
+  const handleAddGroup = () => setShowCreateGroup(true);
+  const handleCloseCreateGroup = () => setShowCreateGroup(false);
+
+  const handleSaveNewGroup = (newGroup: any) => {
+    // Convert Firebase group to legacy format for display
+    const transformedGroup: Group = {
+      id: newGroup.id,
+      name: newGroup.name,
+      description: newGroup.description,
+      avatar: newGroup.coverImageBase64 ? null : '🎭',
+      coverImageUrl: newGroup.coverImageBase64 || null,
+      youOwe: 0,
+      youAreOwed: 0,
+      details: [],
+      members: newGroup.members || [],
+      createdAt: newGroup.createdAt,
+      totalExpenses: newGroup.totalExpenses,
+    };
+    
+    // Add to groups
+    setGroups(prev => [transformedGroup, ...prev]);
+    setShowCreateGroup(false);
+  };
+
+  const handleSearch = () => {
+    setShowSearchBar(!showSearchBar);
+    if (showSearchBar) setSearchQuery('');
+  };
+
+  const handleDeleteGroup = async (groupId: string, groupName: string) => {
+    if (!user) return;
+
+    Alert.alert(
+      'Delete Group',
+      `Are you sure you want to delete "${groupName}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firebaseService.deleteGroup(groupId);
+
+              // Remove from local state
+              setGroups(prev => prev.filter(g => g.id !== groupId));
+
+              Alert.alert('Success', 'Group deleted successfully');
+            } catch (error) {
+              console.error('Error deleting group:', error);
+              Alert.alert('Error', 'Failed to delete group. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const filteredGroups = groups.filter(
+    group =>
+      group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      group.details.some(detail =>
+        detail.text.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+  );
+
+  // Render right swipe action (delete button)
+  const renderRightActions = (group: Group) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => handleDeleteGroup(group.id, group.name)}
+      >
+        <Ionicons name="trash-outline" size={scale(24)} color="#FFFFFF" />
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadGroupsAndBalance();
+    setRefreshing(false);
+  };
+
+  // --- RESPONSIVE ---
+  // createStyles is now called with the scale function and fonts object
+  const styles = createStyles(colors, scale, scaledFontSize);
+
+  // --- STATUS BAR FIX ---
+  // Use dynamic status bar style from theme colors
+  // --- END FIX ---
+
+  // Show skeleton loader during initial loading
+  if (initialLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.statusBarBackground} />
+        <HomeScreenSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+    <SafeAreaView style={styles.container}>
+       {/* --- STATUS BAR FIX --- */}
+       {/* Use dynamic status bar style from theme colors */}
+       <StatusBar barStyle={colors.statusBarStyle} backgroundColor={colors.statusBarBackground} />
+       {/* --- END FIX --- */}
+       
+      <Animated.View style={[{ flex: 1 }, { opacity: contentFadeAnim }]}>
+        {/* Header */}
+        <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Groups</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerButton} onPress={handleSearch}>
+            <MaterialIcons
+              name={showSearchBar ? 'close' : 'search'}
+              // --- RESPONSIVE --- Correctly uses scaled size
+              size={scaledFontSize.lg}
+              color={colors.primaryText}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton} onPress={handleAddGroup}>
+            <MaterialIcons
+              name="add"
+              // --- RESPONSIVE --- Correctly uses scaled size
+              size={scaledFontSize.lg}
+              color={colors.primaryText}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search Bar */}
+      {showSearchBar && (
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search groups or members..."
+            placeholderTextColor={colors.secondaryText}
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              {/* --- RESPONSIVE --- Correctly uses scaled size */}
+              <Text style={{ fontSize: scaledFontSize.lg }}>✖</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      <ScrollView
+        style={styles.scrollView}
+        // --- RESPONSIVE --- Account for tab bar height and floating button with safe area
+        contentContainerStyle={{
+          paddingBottom: getContentBottomPadding(), // Dynamic padding for safe tab bar space
+          flexGrow: 1
+        }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Overall Balance */}
+        <View style={styles.balanceSection}>
+          <Text style={styles.sectionTitle}>Overall Balance</Text>
+          {balanceLoading ? (
+            <ActivityIndicator color={colors.primaryButton} />
+          ) : (
+            <View style={styles.balanceRow}>
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceLabel}>Net Balance</Text>
+                <Text style={styles.balanceValue}>₹{overallBalance.netBalance}</Text>
+              </View>
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceLabel}>You Owe</Text>
+                <Text style={styles.balanceValue}>₹{overallBalance.totalYouOwe}</Text>
+              </View>
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceLabel}>You Are Owed</Text>
+                <Text style={styles.balanceValue}>₹{overallBalance.totalYouAreOwed}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Personal Expenses Card */}
+        <TouchableOpacity
+          style={styles.personalExpensesCard}
+          onPress={() => navigation.navigate('PersonalExpenses')}
+        >
+          <View style={styles.personalExpensesHeader}>
+            <View style={styles.personalExpensesIcon}>
+              <MaterialIcons name="receipt-long" size={scaledFontSize.lg} color={colors.primaryButtonText} />
+            </View>
+            <View style={styles.personalExpensesInfo}>
+              <Text style={styles.personalExpensesTitle}>Personal Expenses</Text>
+              <Text style={styles.personalExpensesSubtitle}>
+                {personalExpensesSummary.expenseCount} expense{personalExpensesSummary.expenseCount !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <View style={styles.personalExpensesAmount}>
+              <Text style={styles.personalExpensesValue}>₹{personalExpensesSummary.totalExpenses.toFixed(0)}</Text>
+              <MaterialIcons name="chevron-right" size={scaledFontSize.lg} color={colors.primaryText} />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* Groups List */}
+        {groupsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primaryButton} />
+            <Text style={styles.loadingText}>Loading groups...</Text>
+          </View>
+        ) : filteredGroups.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="group" size={scaledFontSize.headerLarge * 2} color={colors.secondaryText} />
+            <Text style={styles.emptyText}>No groups yet</Text>
+            <Text style={styles.emptySubtext}>Create your first group to start splitting expenses!</Text>
+          </View>
+        ) : (
+          <>
+            {filteredGroups.map(group => (
+              <Swipeable
+                key={group.id}
+                renderRightActions={() => renderRightActions(group)}
+                overshootRight={false}
+              >
+                <TouchableOpacity
+                  style={styles.groupCard}
+                  onPress={() => navigation.navigate('GroupDetail', { group })}
+                >
+                  <View style={styles.groupHeader}>
+                    <View style={styles.avatarContainer}>
+                      {group.coverImageUrl ? (
+                        <Image source={{ uri: ensureDataUri(group.coverImageUrl) || '' }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatar}>{group.avatar}</Text>
+                      )}
+                    </View>
+                    <View style={styles.groupInfo}>
+                      <Text style={styles.groupName}>{group.name}</Text>
+                      {group.description && (
+                        <Text style={styles.groupDescription}>{group.description}</Text>
+                      )}
+                      <Text style={styles.membersCount}>{group.members?.length || 0} members</Text>
+                    </View>
+                  </View>
+                  <View style={styles.groupDetails}>
+                    {group.details.length > 0 ? (
+                      group.details.map((detail, idx) => (
+                        <View key={idx} style={styles.detailRow}>
+                          <Text style={styles.detailText}>{detail.text}</Text>
+                          <Text style={styles.detailText}>
+                            {detail.type === 'owe' ? '-' : '+'}₹{detail.amount}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.noExpensesText}>No expenses yet</Text>
+                    )}
+                    {group.moreBalances ? (
+                      <Text style={styles.moreBalances}>+ {group.moreBalances} more</Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              </Swipeable>
+            ))}
+            
+            {/* See All Groups Button */}
+            {filteredGroups.length > 0 && (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={() => navigation.navigate('AllGroups')}
+              >
+                <MaterialIcons
+                  name="view-list"
+                  size={scaledFontSize.lg}
+                  color={colors.primaryButton}
+                />
+                <Text style={styles.seeAllButtonText}>See All Groups</Text>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={scaledFontSize.lg}
+                  color={colors.primaryButton}
+                />
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Floating Button */}
+      <TouchableOpacity
+        style={[
+          styles.floatingButton,
+          { bottom: getContentBottomPadding() - scale(20) } // Dynamic positioning above safe tab bar area
+        ]}
+        onPress={handleAddGroup}
+      >
+        <MaterialIcons
+          name="add"
+          // --- RESPONSIVE --- Correctly uses scaled size
+          size={scaledFontSize.headerLarge}
+          color={colors.primaryButtonText}
+        />
+      </TouchableOpacity>
+
+        {/* Create New Group Modal */}
+        <Modal visible={showCreateGroup} animationType="slide" presentationStyle="pageSheet">
+          <CreateNewGroupScreen onClose={handleCloseCreateGroup} onSave={handleSaveNewGroup} />
+        </Modal>
+      </Animated.View>
+    </SafeAreaView>
+    </GestureHandlerRootView>
+  );
+};
+
+// --- RESPONSIVE ---
+// (createStyles function remains unchanged)
+const createStyles = (
+  colors: ReturnType<typeof useTheme>['colors'],
+  scale: (size: number) => number,
+  fonts: { [key: string]: number } // The scaledFontSize object
+) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: scale(16),
+      paddingVertical: scale(12),
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 0,
+      borderBottomColor: colors.secondaryText,
+    },
+    headerTitle: {
+      ...typography.text.headerLarge,
+      color: colors.primaryText,
+      fontSize: fonts.headerLarge, // Use passed-in font
+    },
+    headerActions: { flexDirection: 'row' },
+    headerButton: { padding: scale(8), marginLeft: scale(12) },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.inputBackground,
+      paddingHorizontal: scale(12),
+      margin: scale(12),
+      borderRadius: scale(12),
+    },
+    searchInput: {
+      flex: 1,
+      height: scale(40),
+      color: colors.inputText,
+      fontSize: fonts.body, // Use passed-in font
+    },
+    scrollView: {
+      flex: 1,
+    },
+    balanceSection: {
+      backgroundColor: colors.cardBackground,
+      margin: scale(16),
+      padding: scale(12),
+      borderRadius: scale(8),
+    },
+    sectionTitle: {
+      ...typography.text.header,
+      marginBottom: scale(8),
+      color: colors.primaryText,
+      fontSize: fonts.header, // Use passed-in font
+    },
+    balanceRow: { flexDirection: 'row', justifyContent: 'space-around' },
+    balanceItem: { alignItems: 'center' },
+    balanceLabel: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption, // Use passed-in font
+    },
+    balanceValue: {
+      ...typography.text.subtitle,
+      color: colors.primaryText,
+      fontSize: fonts.subtitle, // Use passed-in font
+    },
+    groupCard: {
+      backgroundColor: colors.cardBackground,
+      marginHorizontal: scale(16),
+      marginVertical: scale(8),
+      padding: scale(12),
+      borderRadius: scale(8),
+    },
+    groupHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: scale(8),
+    },
+    avatarContainer: {
+      width: scale(50),
+      height: scale(50),
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: scale(12),
+    },
+    avatar: {
+      fontSize: fonts['2xl'], // Use passed-in font
+    },
+    avatarImage: {
+      width: scale(50),
+      height: scale(50),
+      borderRadius: scale(25),
+    },
+    groupInfo: {
+      flex: 1,
+      marginLeft: scale(12),
+    },
+    groupName: {
+      ...typography.text.title,
+      color: colors.primaryText,
+      fontSize: fonts.title, // Use passed-in font
+    },
+    groupDescription: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      marginTop: scale(2),
+    },
+    membersCount: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      marginTop: scale(4),
+    },
+    groupDetails: {
+      paddingLeft: scale(8),
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: scale(2),
+    },
+    detailText: {
+      ...typography.text.body,
+      color: colors.primaryText,
+      fontSize: fonts.body, // Use passed-in font
+    },
+    moreBalances: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption, // Use passed-in font
+    },
+    noExpensesText: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      fontStyle: 'italic',
+    },
+    loadingContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: scale(40),
+    },
+    loadingText: {
+      ...typography.text.body,
+      color: colors.secondaryText,
+      fontSize: fonts.body,
+      marginTop: scale(8),
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: scale(60),
+      paddingHorizontal: scale(40),
+    },
+    emptyText: {
+      ...typography.text.title,
+      color: colors.primaryText,
+      fontSize: fonts.title,
+      marginTop: scale(16),
+      textAlign: 'center',
+    },
+    emptySubtext: {
+      ...typography.text.body,
+      color: colors.secondaryText,
+      fontSize: fonts.body,
+      marginTop: scale(8),
+      textAlign: 'center',
+      lineHeight: scale(20),
+    },
+    floatingButton: {
+      position: 'absolute',
+      right: scale(24),
+      width: scale(60),
+      height: scale(60),
+      borderRadius: scale(30),
+      backgroundColor: colors.primaryButton,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowOffset: { width: 0, height: scale(2) },
+      shadowOpacity: 0.25,
+      shadowRadius: scale(4),
+      elevation: 5,
+    },
+    seeAllButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.cardBackground,
+      marginHorizontal: scale(16),
+      marginVertical: scale(12),
+      paddingVertical: scale(16),
+      paddingHorizontal: scale(20),
+      borderRadius: scale(8),
+      borderWidth: 1,
+      borderColor: colors.primaryButton,
+    },
+    seeAllButtonText: {
+      ...typography.text.body,
+      color: colors.primaryButton,
+      fontSize: fonts.body,
+      fontWeight: '600',
+      marginHorizontal: scale(8),
+    },
+    personalExpensesCard: {
+      backgroundColor: colors.cardBackground,
+      marginHorizontal: scale(16),
+      marginVertical: scale(8),
+      padding: scale(16),
+      borderRadius: scale(12),
+      borderWidth: 1,
+      borderColor: colors.primaryButton + '20',
+    },
+    personalExpensesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    personalExpensesIcon: {
+      width: scale(40),
+      height: scale(40),
+      borderRadius: scale(20),
+      backgroundColor: colors.primaryButton,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: scale(12),
+    },
+    personalExpensesInfo: {
+      flex: 1,
+    },
+    personalExpensesTitle: {
+      ...typography.text.title,
+      color: colors.primaryText,
+      fontSize: fonts.title,
+      fontWeight: '600',
+    },
+    personalExpensesSubtitle: {
+      ...typography.text.caption,
+      color: colors.secondaryText,
+      fontSize: fonts.caption,
+      marginTop: scale(2),
+    },
+    personalExpensesAmount: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: scale(4),
+    },
+    personalExpensesValue: {
+      ...typography.text.subtitle,
+      color: colors.primaryText,
+      fontSize: fonts.subtitle,
+      fontWeight: '700',
+    },
+    deleteAction: {
+      backgroundColor: '#FF3B30',
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: scale(80),
+      marginVertical: scale(8),
+      borderRadius: scale(8),
+      marginRight: scale(16),
+    },
+    deleteActionText: {
+      color: '#FFFFFF',
+      fontSize: fonts.caption,
+      fontWeight: '600',
+      marginTop: scale(4),
+    },
+  });
