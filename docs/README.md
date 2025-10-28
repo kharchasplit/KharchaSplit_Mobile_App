@@ -10,6 +10,7 @@ This folder contains all technical documentation for the KharchaSplit project.
 ### Setup Guides
 - **[FIREBASE_SETUP.md](./FIREBASE_SETUP.md)** - Firebase configuration and setup instructions
 - **[UPDATE_SYSTEM_SETUP.md](./UPDATE_SYSTEM_SETUP.md)** - App update system setup and configuration
+- **[GITHUB_ISSUES_GUIDE.md](./GITHUB_ISSUES_GUIDE.md)** - Complete guide for using GitHub Issues for development tracking
 
 ### Feature Implementation Docs
 - **[CONTACTS_OPTIMIZATION.md](./CONTACTS_OPTIMIZATION.md)** - Contact loading performance optimization (caching & lazy loading)
@@ -20,6 +21,10 @@ This folder contains all technical documentation for the KharchaSplit project.
 ### Debugging & Testing
 - **[DEBUGGING_CONTACTS.md](./DEBUGGING_CONTACTS.md)** - Contact-related debugging guide
 - **[testcase.md](./testcase.md)** - Test cases and testing documentation
+
+### Collaboration & Workflow
+- **[GITHUB_ISSUES_GUIDE.md](./GITHUB_ISSUES_GUIDE.md)** - Complete guide for using GitHub Issues for development tracking
+- **[SUGGESTED_ISSUES.md](./SUGGESTED_ISSUES.md)** - List of suggested issues based on current project state
 
 ## Quick Links
 

@@ -1,0 +1,140 @@
+name: 📋 Development Task
+description: Create a development task or improvement
+title: "[TASK] "
+labels: ["task", "in-development"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to create development tasks, improvements, or refactoring work.
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: Task Description
+      description: What needs to be done?
+      placeholder: "Implement/Refactor/Update..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: What type of task is this?
+      options:
+        - New Feature Implementation
+        - Code Refactoring
+        - Performance Optimization
+        - UI/UX Improvement
+        - Bug Fix
+        - Documentation
+        - Testing
+        - DevOps/CI-CD
+        - Dependency Update
+        - Security Enhancement
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component/Module
+      description: Which part of the app does this affect?
+      options:
+        - Authentication & Onboarding
+        - Home Screen
+        - Group Management
+        - Expense Management
+        - Settlement System
+        - Profile & Settings
+        - Notifications
+        - Firebase Services
+        - UI Components
+        - Navigation
+        - State Management
+        - Utils & Helpers
+        - Build & Configuration
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What conditions must be met for this task to be complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-details
+    attributes:
+      label: Technical Details
+      description: Any technical implementation details or considerations
+      placeholder: "Files to modify, APIs to use, design patterns..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Does this task depend on other tasks or issues?
+      placeholder: "Depends on #123, Blocked by #456"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: What is the priority of this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated Effort
+      description: How much effort will this task require?
+      options:
+        - XS - Less than 1 hour
+        - S - 1-4 hours
+        - M - 4-8 hours
+        - L - 1-3 days
+        - XL - More than 3 days
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Development Checklist
+      description: Standard development checklist
+      options:
+        - label: Code implementation
+          required: false
+        - label: Unit tests added/updated
+          required: false
+        - label: Documentation updated
+          required: false
+        - label: Tested on Android
+          required: false
+        - label: Tested on iOS
+          required: false
+        - label: Performance tested
+          required: false
+        - label: Code reviewed
+          required: false

@@ -197,21 +197,36 @@ KharchaSplit is **open source** and welcomes contributions! Whether you're a dev
 
 ### How to Contribute
 
-1. **Fork the repository**
-2. **Create a new branch**
+1. **Check [GitHub Issues](https://github.com/kharchasplit/KharchaSplit_Mobile_App/issues)** for tasks to work on
+   - Look for `good-first-issue` labels for beginner-friendly tasks
+   - Check `help-wanted` for items needing attention
+   - See [SUGGESTED_ISSUES.md](docs/SUGGESTED_ISSUES.md) for ideas
+
+2. **Create or claim an issue**
+   - Use issue templates for [Bug Reports, Feature Requests, or Tasks](https://github.com/kharchasplit/KharchaSplit_Mobile_App/issues/new/choose)
+   - Assign yourself to avoid duplicate work
+   - Read the [GitHub Issues Guide](docs/GITHUB_ISSUES_GUIDE.md) for best practices
+
+3. **Fork the repository and create a branch**
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b feature/issue-123-short-description
    ```
-3. **Commit your changes**
+
+4. **Commit your changes with issue reference**
    ```bash
-   git commit -m "Add: short description of your feature"
+   git commit -m "feat: add feature description (#123)"
    ```
-4. **Push to your fork**
+
+5. **Push to your fork**
    ```bash
-   git push origin feature/your-feature-name
+   git push origin feature/issue-123-short-description
    ```
-5. **Submit a Pull Request (PR)**
-   - Clearly explain your contribution and link any related issues
+
+6. **Submit a Pull Request (PR)**
+   - Link to the issue: "Closes #123"
+   - Clearly explain your changes
+   - Ensure all tests pass
+   - Wait for code review
 
 ### 🧭 Contribution Areas
 
@@ -223,6 +238,14 @@ KharchaSplit is **open source** and welcomes contributions! Whether you're a dev
 - 🤖 AI-driven insights for smart budgeting (future scope)
 - 🔧 Performance optimizations
 - 🌐 Internationalization and localization
+
+### 📊 Track Development Progress
+
+- **[View Active Issues](https://github.com/kharchasplit/KharchaSplit_Mobile_App/issues?q=is%3Aissue+is%3Aopen+label%3Ain-progress)** - See what's currently being worked on
+- **[Planned Features](https://github.com/kharchasplit/KharchaSplit_Mobile_App/milestones)** - View roadmap and upcoming releases
+- **[Good First Issues](https://github.com/kharchasplit/KharchaSplit_Mobile_App/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** - Perfect for first-time contributors
+
+> **Important**: When working on a feature, create or assign yourself to an issue first. Close the issue after completing your work. This keeps everyone informed about ongoing development!
 
 ---
 
@@ -247,6 +270,11 @@ All technical documentation is organized in the [`/docs`](docs/) folder:
 
 - **[DEBUGGING_CONTACTS.md](docs/DEBUGGING_CONTACTS.md)** - Contact-related debugging guide and troubleshooting
 - **[testcase.md](docs/testcase.md)** - Test cases and testing documentation
+
+### 🤝 Collaboration & Workflow
+
+- **[GITHUB_ISSUES_GUIDE.md](docs/GITHUB_ISSUES_GUIDE.md)** - Complete guide for using GitHub Issues effectively
+- **[SUGGESTED_ISSUES.md](docs/SUGGESTED_ISSUES.md)** - Suggested issues based on current development state and future scope
 
 > For a complete index of all documentation, see [docs/README.md](docs/README.md)
 

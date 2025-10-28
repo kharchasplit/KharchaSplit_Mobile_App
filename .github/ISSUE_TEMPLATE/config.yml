@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/kharchasplit/KharchaSplit_Mobile_App/tree/main/docs
+    about: Check out our comprehensive documentation
+  - name: 💬 Discussions
+    url: https://github.com/kharchasplit/KharchaSplit_Mobile_App/discussions
+    about: Join community discussions, ask questions, or share ideas
+  - name: 📧 Contact Support
+    url: mailto:support@kharchasplit.com
+    about: Email us for support or collaboration inquiries
