@@ -45,22 +45,33 @@ class VersionCheckService {
         return null;
       }
 
-      const versionData = versionDoc.data() as AppVersion;
+      const versionData = versionDoc.data();
+
+      // Validate that we have the required fields
+      if (!versionData ||
+          typeof versionData.latestVersionCode !== 'number' ||
+          typeof versionData.minimumVersionCode !== 'number') {
+        console.log('Version document missing required fields:', versionData);
+        return null;
+      }
+
+      // Type assertion after validation
+      const appVersion = versionData as AppVersion;
 
       // Compare version codes
-      const updateAvailable = this.CURRENT_VERSION_CODE < versionData.latestVersionCode;
-      const forceUpdate = this.CURRENT_VERSION_CODE < versionData.minimumVersionCode;
+      const updateAvailable = this.CURRENT_VERSION_CODE < appVersion.latestVersionCode;
+      const forceUpdate = this.CURRENT_VERSION_CODE < appVersion.minimumVersionCode;
 
       const storeUrl = Platform.OS === 'android'
-        ? versionData.playStoreUrl
-        : versionData.appStoreUrl;
+        ? appVersion.playStoreUrl
+        : appVersion.appStoreUrl;
 
       return {
         updateAvailable,
         forceUpdate,
         currentVersion: this.CURRENT_VERSION_NAME,
-        latestVersion: versionData.latestVersion,
-        updateMessage: versionData.updateMessage || 'A new version is available!',
+        latestVersion: appVersion.latestVersion,
+        updateMessage: appVersion.updateMessage || 'A new version is available!',
         storeUrl,
       };
     } catch (error) {
