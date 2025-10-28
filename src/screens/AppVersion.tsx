@@ -32,7 +32,7 @@ export const AppVersion: React.FC<AppVersionProps> = ({ onClose }) => {
       </View>
 
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.text}>App Version 1.0.1</Text>
+        <Text style={styles.text}>App Version 1.0.</Text>
       </ScrollView>
     </SafeAreaView>
   );
