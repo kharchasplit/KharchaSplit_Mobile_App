@@ -24,7 +24,9 @@ This folder contains all technical documentation for the KharchaSplit project.
 
 ### Collaboration & Workflow
 - **[GITHUB_ISSUES_GUIDE.md](./GITHUB_ISSUES_GUIDE.md)** - Complete guide for using GitHub Issues for development tracking
-- **[SUGGESTED_ISSUES.md](./SUGGESTED_ISSUES.md)** - List of suggested issues based on current project state
+- **[CREATING_ISSUES_QUICKSTART.md](./CREATING_ISSUES_QUICKSTART.md)** - Quick-start guide for creating your first issues
+- **[SUGGESTED_ISSUES.md](./SUGGESTED_ISSUES.md)** - List of suggested issues based on current project state and future roadmap
+- **[YOUR_ISSUES_TO_CREATE.md](./YOUR_ISSUES_TO_CREATE.md)** - Personalized list of 17 bugs/tasks found in YOUR codebase analysis
 
 ## Quick Links
 

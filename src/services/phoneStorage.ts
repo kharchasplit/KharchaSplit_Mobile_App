@@ -12,6 +12,8 @@ export class PhoneStorage {
         await AsyncStorage.setItem(PHONE_NUMBER_KEY, phoneNumber);
       }
     } catch (error) {
+      console.error('PhoneStorage: Failed to save phone number to AsyncStorage:', error);
+      // Don't throw - this is a non-critical feature, app should continue
     }
   }
 
@@ -34,6 +36,8 @@ export class PhoneStorage {
     try {
       await AsyncStorage.removeItem(PHONE_NUMBER_KEY);
     } catch (error) {
+      console.error('PhoneStorage: Failed to clear phone number from AsyncStorage:', error);
+      // Don't throw - this is a non-critical cleanup operation
     }
   }
 

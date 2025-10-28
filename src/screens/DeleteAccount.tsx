@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 // --- RESPONSIVE ---
 import { typography } from '../utils/typography'; // Assuming path is correct
 import { firebaseService } from '../services/firebaseService';
+import { authService } from '../services/authService';
 
 type DeleteAccountProps = {
   onClose: () => void;
@@ -108,13 +109,12 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
 
     setSendingOtp(true);
     try {
-      // Here you would integrate with your OTP service
-      // For now, we'll simulate the OTP sending
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
-      
+      // Send real OTP via WATI WhatsApp
+      await authService.sendOTP(userPhoneNumber);
+
       setOtpSent(true);
       setCountdown(60); // Start 60 second countdown
-      
+
       // Start countdown timer
       const timer = setInterval(() => {
         setCountdown(prev => {
@@ -125,16 +125,23 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
           return prev - 1;
         });
       }, 1000);
-      
-      Alert.alert('OTP Sent', `Verification code sent to +91${userPhoneNumber}`);
+
+      Alert.alert(
+        'OTP Sent',
+        `Verification code sent to your WhatsApp number ending with ${userPhoneNumber.slice(-4)}`
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+      console.error('DeleteAccount: Failed to send OTP:', error);
+      Alert.alert(
+        'Error',
+        'Failed to send OTP. Please check your internet connection and try again.'
+      );
     } finally {
       setSendingOtp(false);
     }
   }, [userPhoneNumber]);
 
-  const handleDeleteAccount = useCallback(() => {
+  const handleDeleteAccount = useCallback(async () => {
     if (!otpSent) {
       handleSendOtp();
       return;
@@ -146,10 +153,27 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
       return;
     }
 
-    // In a real app, you would verify the OTP with your backend
-    // For now, we'll accept any 6-digit OTP
-    setShowConfirmModal(true);
-  }, [otp, otpSent, validateOtp, handleSendOtp]);
+    if (!userPhoneNumber) {
+      Alert.alert('Error', 'No phone number found for your account.');
+      return;
+    }
+
+    // Verify OTP with authService
+    try {
+      const isValid = await authService.verifyOTP(userPhoneNumber, otp);
+
+      if (!isValid) {
+        setOtpError('Invalid or expired OTP. Please try again.');
+        return;
+      }
+
+      // OTP verified successfully, show confirmation modal
+      setShowConfirmModal(true);
+    } catch (error) {
+      console.error('DeleteAccount: Failed to verify OTP:', error);
+      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+    }
+  }, [otp, otpSent, userPhoneNumber, validateOtp, handleSendOtp]);
 
   const confirmDelete = useCallback(async () => {
     if (!user?.id) {
@@ -158,19 +182,24 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
     }
 
     setIsDeleting(true);
-    
+
     try {
       // Call Firebase service to deactivate account
       await firebaseService.deactivateUserAccount(user.id);
-      
+
+      // Clear OTP after successful deletion
+      if (userPhoneNumber) {
+        await authService.clearOTP(userPhoneNumber);
+      }
+
       setShowConfirmModal(false);
-      
+
       Alert.alert(
-        '✅ Account Deactivated', 
+        '✅ Account Deactivated',
         'Your account has been successfully deactivated. You have been logged out and cannot access the app anymore.\n\nNote: Your historical data is preserved for security and group transaction integrity.',
         [
-          { 
-            text: 'OK', 
+          {
+            text: 'OK',
             onPress: async () => {
               try {
                 await logout();
@@ -184,16 +213,16 @@ export const DeleteAccount: React.FC<DeleteAccountProps> = ({ onClose }) => {
       );
     } catch (error: any) {
       setIsDeleting(false);
-      
+
       Alert.alert(
-        '❌ Error', 
+        '❌ Error',
         error.message || 'Failed to delete account. Please try again or contact support.',
         [
           { text: 'OK', style: 'default' }
         ]
       );
     }
-  }, [user?.id, logout, onClose]);
+  }, [user?.id, userPhoneNumber, logout, onClose]);
 
   const cancelDelete = useCallback(() => {
     setShowConfirmModal(false);

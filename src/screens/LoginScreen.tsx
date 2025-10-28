@@ -60,11 +60,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     try {
       setLoadingLastNumber(true);
       const lastNumber = await PhoneStorage.getLastPhoneNumber();
-      
+
       if (lastNumber && lastNumber.length === 10) {
         setPhoneNumber(lastNumber);
       }
     } catch (error) {
+      console.error('LoginScreen: Failed to load last used phone number:', error);
+      // Continue silently - this is a convenience feature, not critical
     } finally {
       setLoadingLastNumber(false);
     }

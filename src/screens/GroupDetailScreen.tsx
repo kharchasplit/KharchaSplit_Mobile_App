@@ -237,6 +237,8 @@ export const GroupDetailScreen: React.FC<Props> = ({route, navigation}) => {
         loadedFirebaseSettlements = await firebaseService.getGroupSettlements(currentGroup.id);
         setFirebaseSettlements(loadedFirebaseSettlements);
       } catch (settlementError) {
+        console.error('GroupDetailScreen: Failed to load settlements from Firebase:', settlementError);
+        // Continue with empty settlements - balance calculations will still work without them
       }
 
       // Calculate balances dynamically, excluding paid settlements
