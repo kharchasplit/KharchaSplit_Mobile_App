@@ -122,7 +122,7 @@ export const Biometrics: React.FC<BiometricsProps> = ({ onClose }) => {
       <ScrollView style={styles.scrollView}>
         {/* Dynamic Biometric Authentication Section */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Biometric Authentication</Text>
+          <Text style={styles.sectionTitle}>Biometri Authentication</Text>
 
           {biometricInfo.available ? (
             <View style={styles.biometricCard}>
