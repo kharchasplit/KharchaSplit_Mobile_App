@@ -405,7 +405,7 @@ Every star helps grow our community and motivates more open-source contributions
 
 ## 📄 License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is open source and available under the [MIT License]([LICENSE](https://github.com/kharchasplit/KharchaSplit_Mobile_App/blob/main/LICENSE.md)).
 
 ---
 
