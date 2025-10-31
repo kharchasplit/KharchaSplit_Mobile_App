@@ -15,6 +15,18 @@ We're building KharchaSplit to make shared financial management **simple, free, 
 Together, we can build the most user-friendly and powerful open-source expense management app. 💡
 
 ---
+## 💖 Sponsor KharchaSplit
+
+If you find KharchaSplit useful, please consider supporting its development 🙌
+
+Your sponsorship helps us:
+- Improve features & performance
+- Maintain backend and mobile integrations
+- Keep it free for the community
+
+👉 [Become a Sponsor](link - coming soon)
+
+---
 
 ## 🚀 Getting Started
 
