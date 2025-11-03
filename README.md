@@ -4,13 +4,13 @@
 
 **KharchaSplit** is a free, open-source mobile application built with React Native CLI and Firebase. It simplifies splitting expenses among family and friends, making shared financial management easy, intuitive, and efficient.
 
-Whether it's a trip with friends, a shared apartment, or team event costs — KharchaSplit keeps everything transparent, fair, and easy to settle. Let's make "Who owes whom?" a question of the past! 🚀
+Whether it's a trip with friends, a shared apartment, or team event costs — **KharchaSplit** keeps everything transparent, fair, and easy to settle. Let's make "Who owes whom?" a question of the past! 🚀
 
 ---
 
 ## 💡 Project Vision
 
-KharchaSplit aims to redefine the way people manage shared expenses — simple, transparent, and community-driven.
+**KharchaSplit** aims to redefine the way people manage shared expenses — simple, transparent, and community-driven.
 
 Our long-term goal is to make this an **AI-assisted finance companion** that not only tracks but also suggests smarter budgeting habits.
 
@@ -20,14 +20,14 @@ This is an open-source project, and we're excited to welcome contributors who ca
 
 ## 📬 Invitation to Collaborators
 
-We're building KharchaSplit to make shared financial management **simple, free, and accessible to everyone**. If you'd like to contribute, share feedback, or collaborate, join us on this journey! 🚀
+We're building **KharchaSplit** to make shared financial management **simple, free, and accessible to everyone**. If you'd like to contribute, share feedback, or collaborate, join us on this journey! 🚀
 
 Together, we can build the most user-friendly and powerful open-source expense management app. 💡
 
 ---
 ## 💖 Sponsor KharchaSplit
 
-If you find KharchaSplit useful, please consider supporting its development 🙌
+If you find **KharchaSplit** useful, please consider supporting its development 🙌
 
 Your sponsorship helps us:
 - Improve features & performance
@@ -71,7 +71,7 @@ All technical documentation is organized in the [`/docs`](docs/) folder:
 
 ## 💬 Join the Community
 
-Got ideas or found a bug? Let's collaborate and make KharchaSplit better together!
+Got ideas or found a bug? Let's collaborate and make **KharchaSplit** better together!
 
 - 🗨️ Open a Discussion
 - 🐛 Report issues under the [Issues](https://github.com/yourusername/KharchaSplit/issues) tab
@@ -82,7 +82,7 @@ Got ideas or found a bug? Let's collaborate and make KharchaSplit better togethe
 
 ## ⭐ Support the Project
 
-If you find KharchaSplit useful, please **star this repo** ⭐ and share it with your friends.
+If you find **KharchaSplit** useful, please **star this repo** ⭐ and share it with your friends.
 Every star helps grow our community and motivates more open-source contributions! 💪
 
 ---
