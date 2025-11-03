@@ -127,3 +127,12 @@ git merge upstream/main
 # Push updates to your fork
 git push origin main
 ```
+## 👥 Contributors
+
+We'd like to thank the following contributors for their valuable efforts in building **KharchaSplit**:
+
+- **Vijay Prasad** – Project Manager
+- **Shubham Hinge** – Project Lead & Developer
+- **Shoaib Ansari** – Frontend Developer, Backend Developer
+- **Siddarth Shinde** – UI/UX Designer
+- **Atharv Prasad** – Frontend Developer, Tester/QA
