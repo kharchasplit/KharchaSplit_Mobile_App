@@ -38,18 +38,6 @@ Your sponsorship helps us:
 
 ---
 
-## ✨ Features
-
----
-
-## 📁 Project Structure
-
----
-
-## 🤝 Contribution Guide
-
----
-
 ## 📘 Documentation
 
 All technical documentation is organized in the [`/docs`](docs/) folder:
@@ -77,19 +65,7 @@ All technical documentation is organized in the [`/docs`](docs/) folder:
 - **[GITHUB_ISSUES_GUIDE.md](docs/GITHUB_ISSUES_GUIDE.md)** - Complete guide for using GitHub Issues effectively
 - **[SUGGESTED_ISSUES.md](docs/SUGGESTED_ISSUES.md)** - Suggested issues based on current development state and future scope
 
-> For a complete index of all documentation, see [docs/README.md](docs/README.md)
-
----
-
-## 👥 Contributors
-
-We'd like to thank the following contributors for their valuable efforts in building **KharchaSplit**:
-
-- **Vijay Prasad** – Project Manager
-- **Shubham Hinge** – Project Lead & Developer
-- **Shoaib Ansari** – Frontend Developer, Backend Developer
-- **Siddarth Shinde** – UI/UX Designer
-- **Atharv Prasad** – Frontend Developer, Tester/QA
+> For a complete index of all documentation and ✨ Features 📁 Project Structure 🤝 Contribution Guide, see [docs/README.md](docs/README.md)
 
 ---
 
