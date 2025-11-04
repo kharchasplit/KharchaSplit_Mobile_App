@@ -36,5 +36,5 @@
 | **Navigation** | React Navigation |
 | **UI Components** | Custom components with theme support |
 | **Libraries & Tools** | React Native Gesture Handler, Vector Icons, Base64 Image Handling |
-| **Development Tools** | Node.js, npm, Watchman, Xcode, CocoaPods, JDK, Android Studio |
+| **Development Tools** | Node.js, npm, Xcode, CocoaPods, JDK, Android Studio |
 | **Version Control** | Git + GitHub |
